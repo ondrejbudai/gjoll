@@ -1,0 +1,22 @@
+# Go
+gjoll
+*.exe
+*.test
+*.out
+
+# OpenTofu / Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars.json
+gjoll_injected.tf
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
