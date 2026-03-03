@@ -64,6 +64,7 @@ Environments are standard `.tf` files. gjoll injects two variables and reads out
 
 **Optional outputs:**
 - `init_script` — bash script run over SSH after boot
+- `clone_secrets` — list of `{from, to}` objects; copies local files to the VM after init. If `to` is omitted, it defaults to the same path as `from`
 
 See `examples/` for complete environment files.
 
@@ -74,7 +75,8 @@ See `examples/` for complete environment files.
 3. Runs `tofu init` and `tofu apply`
 4. Reads outputs (`public_ip`, `instance_id`, `ssh_user`)
 5. If `init_script` output exists, waits for SSH and runs it on the VM
-6. Saves instance metadata for other commands
+6. If `clone_secrets` output exists, copies each file from the local machine to the VM
+7. Saves instance metadata for other commands
 
 ## Git Sync
 

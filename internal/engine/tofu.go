@@ -147,6 +147,17 @@ func Provision(name, envPath string) error {
 		}
 	}
 
+	// Copy secrets if defined
+	if len(outputs.CloneSecrets) > 0 {
+		fmt.Println("Copying secrets...")
+		for _, s := range outputs.CloneSecrets {
+			fmt.Printf("  %s → %s\n", s.From, s.To)
+			if err := remote.CopySecret(outputs.PublicIP, outputs.SSHUser, keyPath, s.From, s.To); err != nil {
+				return fmt.Errorf("clone secret %s: %w", s.From, err)
+			}
+		}
+	}
+
 	fmt.Printf("\nSandbox %q ready!\n", name)
 	fmt.Printf("  IP:   %s\n", outputs.PublicIP)
 	fmt.Printf("  User: %s\n", outputs.SSHUser)

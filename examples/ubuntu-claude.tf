@@ -75,3 +75,11 @@ output "init_script" {
     sudo npm install -g @anthropic-ai/claude-code
   EOT
 }
+
+# Uncomment to copy secrets from your local machine to the VM after init:
+# output "clone_secrets" {
+#   value = [
+#     { from = "~/.ssh/id_ed25519.pub" },
+#     { from = "~/.anthropic/api_key", to = "/home/ubuntu/.config/anthropic/api_key" },
+#   ]
+# }

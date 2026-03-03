@@ -5,12 +5,19 @@ import (
 	"fmt"
 )
 
+// SecretMapping defines a file to copy from the local machine to the VM.
+type SecretMapping struct {
+	From string
+	To   string
+}
+
 // Outputs holds the parsed values from `tofu output -json`.
 type Outputs struct {
-	PublicIP   string
-	InstanceID string
-	SSHUser    string
-	InitScript string // optional
+	PublicIP     string
+	InstanceID   string
+	SSHUser      string
+	InitScript   string          // optional
+	CloneSecrets []SecretMapping // optional
 }
 
 // tofuOutput is the structure of a single output value from `tofu output -json`.
@@ -42,6 +49,27 @@ func ParseOutputs(data []byte) (*Outputs, error) {
 		InstanceID: getString("instance_id"),
 		SSHUser:    getString("ssh_user"),
 		InitScript: getString("init_script"),
+	}
+
+	// Parse optional clone_secrets list
+	if out, ok := raw["clone_secrets"]; ok {
+		if list, ok := out.Value.([]any); ok {
+			for _, item := range list {
+				m, ok := item.(map[string]any)
+				if !ok {
+					continue
+				}
+				from, _ := m["from"].(string)
+				if from == "" {
+					continue
+				}
+				to, _ := m["to"].(string)
+				if to == "" {
+					to = from
+				}
+				o.CloneSecrets = append(o.CloneSecrets, SecretMapping{From: from, To: to})
+			}
+		}
 	}
 
 	var missing []string

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -133,6 +134,65 @@ func RunScript(ip, user, keyPath, content string) error {
 	ssh.Stderr = os.Stderr
 	if err := ssh.Run(); err != nil {
 		return fmt.Errorf("running script: %w", err)
+	}
+
+	return nil
+}
+
+// ExpandTilde replaces a leading ~ with the user's home directory.
+func ExpandTilde(path string) (string, error) {
+	if path == "~" || strings.HasPrefix(path, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("expanding ~: %w", err)
+		}
+		return filepath.Join(home, path[1:]), nil
+	}
+	return path, nil
+}
+
+// CopySecret copies a local file to the remote VM, preserving permissions.
+func CopySecret(ip, user, keyPath, localPath, remotePath string) error {
+	local, err := ExpandTilde(localPath)
+	if err != nil {
+		return err
+	}
+	rem, err := ExpandTilde(remotePath)
+	if err != nil {
+		return err
+	}
+
+	if _, err := os.Stat(local); err != nil {
+		return fmt.Errorf("local file %s: %w", localPath, err)
+	}
+
+	sshOpts := []string{
+		"-o", "StrictHostKeyChecking=no",
+		"-o", "UserKnownHostsFile=/dev/null",
+		"-o", "LogLevel=ERROR",
+		"-i", keyPath,
+	}
+	target := fmt.Sprintf("%s@%s", user, ip)
+
+	// Ensure remote directory exists
+	remoteDir := filepath.Dir(rem)
+	mkdirArgs := append([]string{"ssh"}, sshOpts...)
+	mkdirArgs = append(mkdirArgs, target, "mkdir -p "+remoteDir)
+	mkdir := exec.Command(mkdirArgs[0], mkdirArgs[1:]...)
+	mkdir.Stdout = os.Stdout
+	mkdir.Stderr = os.Stderr
+	if err := mkdir.Run(); err != nil {
+		return fmt.Errorf("creating remote directory %s: %w", remoteDir, err)
+	}
+
+	// Copy file with preserved permissions
+	scpArgs := append([]string{"scp", "-p"}, sshOpts...)
+	scpArgs = append(scpArgs, local, target+":"+rem)
+	scp := exec.Command(scpArgs[0], scpArgs[1:]...)
+	scp.Stdout = os.Stdout
+	scp.Stderr = os.Stderr
+	if err := scp.Run(); err != nil {
+		return fmt.Errorf("copying %s to %s: %w", localPath, remotePath, err)
 	}
 
 	return nil

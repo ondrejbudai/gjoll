@@ -45,6 +45,45 @@ func TestSSHConfigPath(t *testing.T) {
 	}
 }
 
+func TestExpandTilde(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("UserHomeDir() error: %v", err)
+	}
+
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"~/foo/bar", filepath.Join(home, "foo/bar")},
+		{"~/.ssh/id_ed25519", filepath.Join(home, ".ssh/id_ed25519")},
+		{"~", home},
+		{"/absolute/path", "/absolute/path"},
+		{"relative/path", "relative/path"},
+	}
+
+	for _, tt := range tests {
+		got, err := ExpandTilde(tt.input)
+		if err != nil {
+			t.Errorf("ExpandTilde(%q) error: %v", tt.input, err)
+			continue
+		}
+		if got != tt.want {
+			t.Errorf("ExpandTilde(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestCopySecretMissingFile(t *testing.T) {
+	err := CopySecret("1.2.3.4", "user", "/fake/key", "/nonexistent/file", "/remote/dest")
+	if err == nil {
+		t.Fatal("CopySecret() expected error for non-existent local file")
+	}
+	if !strings.Contains(err.Error(), "local file") {
+		t.Errorf("error = %q, want it to mention 'local file'", err.Error())
+	}
+}
+
 func TestReadPublicKey(t *testing.T) {
 	dir := t.TempDir()
 	keyPath := filepath.Join(dir, "id_ed25519")
