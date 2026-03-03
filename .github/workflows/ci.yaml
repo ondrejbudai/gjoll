@@ -17,7 +17,7 @@ jobs:
           go-version-file: go.mod
 
       - name: Install just
-        uses: extractions/setup-just@v2
+        run: apt update && apt install -y just
 
       - name: Install golangci-lint
         run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
