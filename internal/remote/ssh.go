@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -145,6 +146,9 @@ func RunScript(ip, user, keyPath, content string) error {
 	return nil
 }
 
+// execCommand is the function used to create exec.Cmd. Tests can replace it.
+var execCommand = exec.Command
+
 // ExpandTilde replaces a leading ~ with the user's home directory.
 func ExpandTilde(path string) (string, error) {
 	if path == "~" || strings.HasPrefix(path, "~/") {
@@ -158,12 +162,10 @@ func ExpandTilde(path string) (string, error) {
 }
 
 // CopySecret copies a local file to the remote VM, preserving permissions.
+// The localPath is expanded on the local machine; the remotePath is passed
+// as-is to the remote shell so that ~ resolves to the remote user's home.
 func CopySecret(ip, user, keyPath, localPath, remotePath string) error {
 	local, err := ExpandTilde(localPath)
-	if err != nil {
-		return err
-	}
-	rem, err := ExpandTilde(remotePath)
 	if err != nil {
 		return err
 	}
@@ -180,21 +182,23 @@ func CopySecret(ip, user, keyPath, localPath, remotePath string) error {
 	}
 	target := fmt.Sprintf("%s@%s", user, ip)
 
-	// Ensure remote directory exists
-	remoteDir := filepath.Dir(rem)
+	// Ensure remote directory exists.
+	// Use the remote shell to expand ~ so it resolves to the remote user's home.
+	remoteDir := path.Dir(remotePath)
 	mkdirArgs := append([]string{"ssh"}, sshOpts...)
 	mkdirArgs = append(mkdirArgs, target, "mkdir -p "+remoteDir)
-	mkdir := exec.Command(mkdirArgs[0], mkdirArgs[1:]...)
+	mkdir := execCommand(mkdirArgs[0], mkdirArgs[1:]...)
 	mkdir.Stdout = os.Stdout
 	mkdir.Stderr = os.Stderr
 	if err := mkdir.Run(); err != nil {
 		return fmt.Errorf("creating remote directory %s: %w", remoteDir, err)
 	}
 
-	// Copy file with preserved permissions
+	// Copy file with preserved permissions.
+	// scp resolves ~ on the remote side, so pass remotePath unexpanded.
 	scpArgs := append([]string{"scp", "-p"}, sshOpts...)
-	scpArgs = append(scpArgs, local, target+":"+rem)
-	scp := exec.Command(scpArgs[0], scpArgs[1:]...)
+	scpArgs = append(scpArgs, local, target+":"+remotePath)
+	scp := execCommand(scpArgs[0], scpArgs[1:]...)
 	scp.Stdout = os.Stdout
 	scp.Stderr = os.Stderr
 	if err := scp.Run(); err != nil {

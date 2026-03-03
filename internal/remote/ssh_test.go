@@ -2,6 +2,7 @@ package remote
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -81,6 +82,52 @@ func TestCopySecretMissingFile(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "local file") {
 		t.Errorf("error = %q, want it to mention 'local file'", err.Error())
+	}
+}
+
+func TestCopySecretDoesNotExpandRemoteTilde(t *testing.T) {
+	localFile := filepath.Join(t.TempDir(), "creds.json")
+	if err := os.WriteFile(localFile, []byte(`{}`), 0600); err != nil {
+		t.Fatalf("WriteFile() error: %v", err)
+	}
+
+	// Capture all commands executed by CopySecret.
+	var commands [][]string
+	original := execCommand
+	execCommand = func(name string, args ...string) *exec.Cmd {
+		commands = append(commands, append([]string{name}, args...))
+		return exec.Command("true") // no-op
+	}
+	t.Cleanup(func() { execCommand = original })
+
+	remotePath := "~/.config/gcloud/application_default_credentials.json"
+	err := CopySecret("1.2.3.4", "fedora", "/fake/key", localFile, remotePath)
+	if err != nil {
+		t.Fatalf("CopySecret() unexpected error: %v", err)
+	}
+
+	if len(commands) != 2 {
+		t.Fatalf("expected 2 commands (mkdir + scp), got %d", len(commands))
+	}
+
+	home, _ := os.UserHomeDir()
+
+	// The mkdir command should contain the unexpanded ~ path.
+	mkdirCmd := strings.Join(commands[0], " ")
+	if !strings.Contains(mkdirCmd, "~/.config/gcloud") {
+		t.Errorf("mkdir command = %q, want it to contain unexpanded ~", mkdirCmd)
+	}
+	if strings.Contains(mkdirCmd, home) {
+		t.Errorf("mkdir command = %q, should not contain local home %q", mkdirCmd, home)
+	}
+
+	// The scp command should contain the unexpanded ~ path in the target.
+	scpCmd := strings.Join(commands[1], " ")
+	if !strings.Contains(scpCmd, ":"+remotePath) {
+		t.Errorf("scp command = %q, want it to contain %q", scpCmd, ":"+remotePath)
+	}
+	if strings.Contains(scpCmd, home) {
+		t.Errorf("scp command = %q, should not contain local home %q", scpCmd, home)
 	}
 }
 
