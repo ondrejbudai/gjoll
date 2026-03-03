@@ -49,6 +49,17 @@ func GitPush(configPath, name, remotePath string) error {
 		return fmt.Errorf("git push: %w", err)
 	}
 
+	// Set remote HEAD to match the pushed branch so pull can resolve it
+	branchCmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	if branchOutput, err := branchCmd.Output(); err == nil {
+		branch := strings.TrimSpace(string(branchOutput))
+		if branch != "HEAD" {
+			headCmd := exec.Command("ssh", "-F", configPath, name,
+				fmt.Sprintf("cd %s && git symbolic-ref HEAD refs/heads/%s", remotePath, branch))
+			headCmd.Run() // best effort
+		}
+	}
+
 	return nil
 }
 
@@ -74,40 +85,44 @@ func GitPull(configPath, name, branchName string) error {
 		return fmt.Errorf("git fetch: %w", err)
 	}
 
-	// Create branch from fetched HEAD
-	// First, find the default branch on the remote
+	// Determine which remote branch to check out.
+	// Try resolving HEAD from the remote first, then fall back to common names.
+	var remoteBranch string
 	refCmd := exec.Command("git", "remote", "show", remoteName)
 	refCmd.Env = append(os.Environ(), "GIT_SSH_COMMAND="+sshCmd)
-	refOutput, err := refCmd.Output()
-	if err != nil {
-		// Fallback: try common branch names
-		for _, ref := range []string{"main", "master"} {
-			remoteBranch := remoteName + "/" + ref
-			cmd := exec.Command("git", "rev-parse", "--verify", remoteBranch)
-			if cmd.Run() == nil {
-				checkoutCmd := exec.Command("git", "checkout", "-B", branchName, remoteBranch)
-				checkoutCmd.Stdout = os.Stdout
-				checkoutCmd.Stderr = os.Stderr
-				return checkoutCmd.Run()
+	if refOutput, err := refCmd.Output(); err == nil {
+		for _, line := range strings.Split(string(refOutput), "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "HEAD branch:") {
+				branch := strings.TrimSpace(strings.TrimPrefix(line, "HEAD branch:"))
+				if branch != "(unknown)" {
+					remoteBranch = remoteName + "/" + branch
+				}
+				break
 			}
 		}
-		return fmt.Errorf("could not determine remote branch: %w", err)
 	}
 
-	// Parse HEAD branch from `git remote show` output
-	for _, line := range strings.Split(string(refOutput), "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "HEAD branch:") {
-			branch := strings.TrimSpace(strings.TrimPrefix(line, "HEAD branch:"))
-			remoteBranch := remoteName + "/" + branch
-			checkoutCmd := exec.Command("git", "checkout", "-B", branchName, remoteBranch)
-			checkoutCmd.Stdout = os.Stdout
-			checkoutCmd.Stderr = os.Stderr
-			return checkoutCmd.Run()
+	// Fallback: try common branch names
+	if remoteBranch == "" {
+		for _, ref := range []string{"main", "master"} {
+			candidate := remoteName + "/" + ref
+			cmd := exec.Command("git", "rev-parse", "--verify", candidate)
+			if cmd.Run() == nil {
+				remoteBranch = candidate
+				break
+			}
 		}
 	}
 
-	return fmt.Errorf("could not determine HEAD branch on remote %s", remoteName)
+	if remoteBranch == "" {
+		return fmt.Errorf("could not determine branch on remote %s", remoteName)
+	}
+
+	checkoutCmd := exec.Command("git", "checkout", "-B", branchName, remoteBranch)
+	checkoutCmd.Stdout = os.Stdout
+	checkoutCmd.Stderr = os.Stderr
+	return checkoutCmd.Run()
 }
 
 func remoteExists(name string) bool {
