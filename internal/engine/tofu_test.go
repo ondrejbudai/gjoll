@@ -36,7 +36,9 @@ func TestCopyTFFilesSingle(t *testing.T) {
 	// Create a single .tf file
 	tfContent := `resource "aws_instance" "test" {}`
 	srcFile := filepath.Join(srcDir, "main.tf")
-	os.WriteFile(srcFile, []byte(tfContent), 0644)
+	if err := os.WriteFile(srcFile, []byte(tfContent), 0644); err != nil {
+		t.Fatalf("WriteFile() error: %v", err)
+	}
 
 	if err := copyTFFiles(srcFile, destDir); err != nil {
 		t.Fatalf("copyTFFiles() error: %v", err)
@@ -57,9 +59,15 @@ func TestCopyTFFilesDirectory(t *testing.T) {
 	destDir := t.TempDir()
 
 	// Create .tf files and a non-.tf file
-	os.WriteFile(filepath.Join(srcDir, "main.tf"), []byte("main"), 0644)
-	os.WriteFile(filepath.Join(srcDir, "vars.tf"), []byte("vars"), 0644)
-	os.WriteFile(filepath.Join(srcDir, "README.md"), []byte("readme"), 0644)
+	if err := os.WriteFile(filepath.Join(srcDir, "main.tf"), []byte("main"), 0644); err != nil {
+		t.Fatalf("WriteFile() error: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, "vars.tf"), []byte("vars"), 0644); err != nil {
+		t.Fatalf("WriteFile() error: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, "README.md"), []byte("readme"), 0644); err != nil {
+		t.Fatalf("WriteFile() error: %v", err)
+	}
 
 	if err := copyTFFiles(srcDir, destDir); err != nil {
 		t.Fatalf("copyTFFiles() error: %v", err)

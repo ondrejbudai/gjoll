@@ -90,7 +90,9 @@ func TestReadPublicKey(t *testing.T) {
 
 	// Write a fake public key
 	pubContent := "ssh-ed25519 AAAA... user@host\n"
-	os.WriteFile(keyPath+".pub", []byte(pubContent), 0644)
+	if err := os.WriteFile(keyPath+".pub", []byte(pubContent), 0644); err != nil {
+		t.Fatalf("WriteFile() error: %v", err)
+	}
 
 	got, err := ReadPublicKey(keyPath)
 	if err != nil {

@@ -73,7 +73,7 @@ func WaitForSSH(ip, user, keyPath string, timeout time.Duration) error {
 	for time.Now().Before(deadline) {
 		conn, err := net.DialTimeout("tcp", ip+":22", 5*time.Second)
 		if err == nil {
-			conn.Close()
+			_ = conn.Close()
 			// TCP is open, try actual SSH
 			cmd := exec.Command("ssh",
 				"-o", "StrictHostKeyChecking=no",
@@ -100,13 +100,19 @@ func RunScript(ip, user, keyPath, content string) error {
 	if err != nil {
 		return fmt.Errorf("creating temp file: %w", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() {
+		if err := os.Remove(tmpFile.Name()); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: removing temp file %s: %v\n", tmpFile.Name(), err)
+		}
+	}()
 
 	if _, err := tmpFile.WriteString(content); err != nil {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return fmt.Errorf("writing script: %w", err)
 	}
-	tmpFile.Close()
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("closing temp file: %w", err)
+	}
 
 	sshOpts := []string{
 		"-o", "StrictHostKeyChecking=no",

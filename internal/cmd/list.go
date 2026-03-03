@@ -25,9 +25,9 @@ var listCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "NAME\tSTATUS\tIP\tUSER\tINSTANCE ID")
+		_, _ = fmt.Fprintln(w, "NAME\tSTATUS\tIP\tUSER\tINSTANCE ID")
 		for _, inst := range instances {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
 				inst.Name, inst.Status, inst.PublicIP, inst.SSHUser, inst.InstanceID)
 		}
 		return w.Flush()

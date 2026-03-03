@@ -239,18 +239,22 @@ func copyTFFiles(src, dest string) error {
 	return nil
 }
 
-func copyFile(src, dest string) error {
+func copyFile(src, dest string) (err error) {
 	in, err := os.Open(src)
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }()
 
 	out, err := os.Create(dest)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+	defer func() {
+		if cerr := out.Close(); err == nil {
+			err = cerr
+		}
+	}()
 
 	_, err = io.Copy(out, in)
 	return err

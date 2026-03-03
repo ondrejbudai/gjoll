@@ -32,7 +32,9 @@ func GitPush(configPath, name, remotePath string) error {
 	// Add or update git remote
 	if remoteExists(remoteName) {
 		cmd := exec.Command("git", "remote", "set-url", remoteName, remoteURL)
-		cmd.Run() // ignore errors, best effort
+		if err := cmd.Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: updating git remote %s: %v\n", remoteName, err)
+		}
 	} else {
 		cmd := exec.Command("git", "remote", "add", remoteName, remoteURL)
 		if err := cmd.Run(); err != nil {
@@ -56,7 +58,9 @@ func GitPush(configPath, name, remotePath string) error {
 		if branch != "HEAD" {
 			headCmd := exec.Command("ssh", "-F", configPath, name,
 				fmt.Sprintf("cd %s && git symbolic-ref HEAD refs/heads/%s", remotePath, branch))
-			headCmd.Run() // best effort
+			if err := headCmd.Run(); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: setting remote HEAD to %s: %v\n", branch, err)
+			}
 		}
 	}
 

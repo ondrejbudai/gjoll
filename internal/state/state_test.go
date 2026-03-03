@@ -14,9 +14,13 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "creating temp dir: %v\n", err)
 		os.Exit(1)
 	}
-	defer os.RemoveAll(dir)
-	os.Setenv("XDG_DATA_HOME", dir)
-	os.Exit(m.Run())
+	if err := os.Setenv("XDG_DATA_HOME", dir); err != nil {
+		fmt.Fprintf(os.Stderr, "setting env: %v\n", err)
+		os.Exit(1)
+	}
+	code := m.Run()
+	_ = os.RemoveAll(dir)
+	os.Exit(code)
 }
 
 func setupTestDir(t *testing.T) string {
@@ -40,7 +44,9 @@ func TestSaveAndLoad(t *testing.T) {
 	}
 
 	instDir := filepath.Join(dir, "gjoll", "instances", "test-box")
-	os.MkdirAll(instDir, 0755)
+	if err := os.MkdirAll(instDir, 0755); err != nil {
+		t.Fatalf("MkdirAll() error: %v", err)
+	}
 
 	if err := Save(inst); err != nil {
 		t.Fatalf("Save() error: %v", err)
@@ -92,7 +98,9 @@ func TestListWithInstances(t *testing.T) {
 	// Create two instances
 	for _, name := range []string{"box-a", "box-b"} {
 		instDir := filepath.Join(dir, "gjoll", "instances", name)
-		os.MkdirAll(instDir, 0755)
+		if err := os.MkdirAll(instDir, 0755); err != nil {
+			t.Fatalf("MkdirAll() error: %v", err)
+		}
 		inst := &Instance{
 			Name:       name,
 			PublicIP:   "1.2.3.4",
@@ -129,10 +137,14 @@ func TestDelete(t *testing.T) {
 	dir := setupTestDir(t)
 
 	instDir := filepath.Join(dir, "gjoll", "instances", "to-delete")
-	os.MkdirAll(instDir, 0755)
+	if err := os.MkdirAll(instDir, 0755); err != nil {
+		t.Fatalf("MkdirAll() error: %v", err)
+	}
 
 	inst := &Instance{Name: "to-delete", PublicIP: "1.2.3.4", InstanceID: "i-123", SSHUser: "fedora", Status: "running", CreatedAt: time.Now()}
-	Save(inst)
+	if err := Save(inst); err != nil {
+		t.Fatalf("Save() error: %v", err)
+	}
 
 	if err := Delete("to-delete"); err != nil {
 		t.Fatalf("Delete() error: %v", err)

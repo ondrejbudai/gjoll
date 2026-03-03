@@ -116,7 +116,7 @@ func Lock(name string) (*os.File, error) {
 	}
 
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
-		f.Close()
+		_ = f.Close()
 		return nil, fmt.Errorf("acquiring lock: %w", err)
 	}
 
@@ -137,7 +137,7 @@ func SharedLock(name string) (*os.File, error) {
 	}
 
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_SH); err != nil {
-		f.Close()
+		_ = f.Close()
 		return nil, fmt.Errorf("acquiring shared lock: %w", err)
 	}
 
@@ -147,7 +147,11 @@ func SharedLock(name string) (*os.File, error) {
 // Unlock releases a file lock.
 func Unlock(f *os.File) {
 	if f != nil {
-		syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
-		f.Close()
+		if err := syscall.Flock(int(f.Fd()), syscall.LOCK_UN); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: releasing lock: %v\n", err)
+		}
+		if err := f.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: closing lock file: %v\n", err)
+		}
 	}
 }
