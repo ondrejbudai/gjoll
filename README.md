@@ -1,6 +1,6 @@
 # gjoll
 
-A CLI tool to provision cloud VM sandboxes for coding agents. Each environment is a standard OpenTofu `.tf` file — you get the full power of HCL with no abstractions in the way.
+A CLI tool to provision cloud VM sandboxes for coding agents. Each environment is a standard OpenTofu `.tf` file — you get the full power of HCL with no abstractions in the way. Supports any provider with an OpenTofu provider (AWS, Proxmox, etc.).
 
 ## Install
 
@@ -11,7 +11,6 @@ go install github.com/obudai/gjoll/cmd/gjoll@latest
 ### Prerequisites
 
 - [OpenTofu](https://opentofu.org/) (`tofu`)
-- [AWS CLI](https://aws.amazon.com/cli/) (`aws`) — for stop/start
 - `ssh`, `scp`, `ssh-keygen`, `git`
 
 ## Quick Start
@@ -33,10 +32,6 @@ gjoll pull fedora-dev agent-changes
 gjoll cp fedora-dev ./config.env :/home/fedora/
 gjoll cp fedora-dev :/home/fedora/output.log ./
 
-# Stop/start (preserves disk)
-gjoll stop fedora-dev
-gjoll start fedora-dev
-
 # Tear down
 gjoll down fedora-dev
 ```
@@ -47,8 +42,6 @@ gjoll down fedora-dev
 |---|---|
 | `gjoll up <env> [-n name]` | Create and launch a VM |
 | `gjoll down <name>` | Destroy VM and all resources |
-| `gjoll stop <name>` | Stop VM (preserves disk) |
-| `gjoll start <name>` | Resume a stopped VM |
 | `gjoll list` | List all sandboxes |
 | `gjoll status <name>` | Show sandbox details |
 | `gjoll ssh <name>` | SSH into sandbox |

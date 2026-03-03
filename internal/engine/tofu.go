@@ -175,79 +175,6 @@ func Destroy(name string) error {
 	return nil
 }
 
-// Stop stops a running instance (preserves disk).
-func Stop(name string) error {
-	inst, err := state.Load(name)
-	if err != nil {
-		return err
-	}
-
-	cmd := exec.Command("aws", "ec2", "stop-instances", "--instance-ids", inst.InstanceID)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("stopping instance: %w", err)
-	}
-
-	inst.Status = "stopped"
-	if err := state.Save(inst); err != nil {
-		return fmt.Errorf("saving state: %w", err)
-	}
-
-	fmt.Printf("Sandbox %q stopped.\n", name)
-	return nil
-}
-
-// Start resumes a stopped instance.
-func Start(name string) error {
-	inst, err := state.Load(name)
-	if err != nil {
-		return err
-	}
-
-	cmd := exec.Command("aws", "ec2", "start-instances", "--instance-ids", inst.InstanceID)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("starting instance: %w", err)
-	}
-
-	// Wait for the instance to get a new public IP
-	fmt.Println("Waiting for instance to start...")
-	var newIP string
-	for i := 0; i < 60; i++ {
-		time.Sleep(5 * time.Second)
-		ip, err := getPublicIP(inst.InstanceID)
-		if err == nil && ip != "" {
-			newIP = ip
-			break
-		}
-	}
-
-	if newIP == "" {
-		return fmt.Errorf("timed out waiting for public IP")
-	}
-
-	inst.PublicIP = newIP
-	inst.Status = "running"
-	if err := state.Save(inst); err != nil {
-		return fmt.Errorf("saving state: %w", err)
-	}
-
-	// Update SSH config
-	instanceDir, _ := paths.InstanceDir(name)
-	keyPath := filepath.Join(instanceDir, "id_ed25519")
-	sshConfig := remote.SSHConfigPath(instanceDir)
-	if err := remote.WriteConfig(sshConfig, name, newIP, inst.SSHUser, keyPath); err != nil {
-		return fmt.Errorf("updating SSH config: %w", err)
-	}
-
-	fmt.Printf("Sandbox %q started.\n", name)
-	fmt.Printf("  IP: %s\n", newIP)
-
-	return nil
-}
-
 func runTofu(chdir string, args ...string) error {
 	fullArgs := append([]string{"-chdir=" + chdir}, args...)
 	cmd := exec.Command("tofu", fullArgs...)
@@ -264,23 +191,6 @@ func readOutputs(tfDir string) (*config.Outputs, error) {
 		return nil, fmt.Errorf("tofu output: %w", err)
 	}
 	return config.ParseOutputs(out)
-}
-
-func getPublicIP(instanceID string) (string, error) {
-	cmd := exec.Command("aws", "ec2", "describe-instances",
-		"--instance-ids", instanceID,
-		"--query", "Reservations[0].Instances[0].PublicIpAddress",
-		"--output", "text",
-	)
-	out, err := cmd.Output()
-	if err != nil {
-		return "", err
-	}
-	ip := strings.TrimSpace(string(out))
-	if ip == "" || ip == "None" {
-		return "", fmt.Errorf("no public IP")
-	}
-	return ip, nil
 }
 
 func copyTFFiles(src, dest string) error {

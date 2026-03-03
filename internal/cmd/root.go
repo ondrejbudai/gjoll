@@ -18,8 +18,6 @@ func init() {
 	rootCmd.AddCommand(upCmd)
 	rootCmd.AddCommand(downCmd)
 	rootCmd.AddCommand(sshCmd)
-	rootCmd.AddCommand(stopCmd)
-	rootCmd.AddCommand(startCmd)
 	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(pushCmd)
