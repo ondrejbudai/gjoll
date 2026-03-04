@@ -46,7 +46,7 @@ gjoll down fedora-dev
 | `gjoll status <name>` | Show sandbox details |
 | `gjoll ssh <name>` | SSH into sandbox |
 | `gjoll push <name> [--path]` | Git push current repo to VM |
-| `gjoll pull <name> [branch] [--path]` | Git fetch from VM, create local branch |
+| `gjoll pull <name> [refspec] [--path]` | Git fetch from VM, create local branch |
 | `gjoll cp <name> <src> <dest>` | Copy files (prefix remote paths with `:`) |
 
 ## Environment Files
@@ -87,6 +87,16 @@ Use `--path` to change where the repo lives on the VM (default `~/project`):
 ```bash
 gjoll push my-vm --path ~/myapp
 gjoll pull my-vm --path ~/myapp
+```
+
+`gjoll pull` accepts an optional refspec to control which remote branch to fetch
+and what local branch name to use:
+
+```bash
+gjoll pull my-vm                         # auto-detect remote branch → gjoll/my-vm
+gjoll pull my-vm feature                 # fetch "feature" → gjoll/my-vm
+gjoll pull my-vm feature:my-branch       # fetch "feature" → my-branch
+gjoll pull my-vm :my-branch              # auto-detect remote branch → my-branch
 ```
 
 ## Development

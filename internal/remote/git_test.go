@@ -26,11 +26,35 @@ func TestRemoteExists(t *testing.T) {
 	}
 }
 
+func TestParseRefspec(t *testing.T) {
+	tests := []struct {
+		arg          string
+		wantRemote   string
+		wantLocal    string
+	}{
+		{"", "", ""},
+		{"feature", "feature", ""},
+		{"feature:my-branch", "feature", "my-branch"},
+		{":my-branch", "", "my-branch"},
+		{"a:b:c", "a", "b:c"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.arg, func(t *testing.T) {
+			gotRemote, gotLocal := ParseRefspec(tt.arg)
+			if gotRemote != tt.wantRemote || gotLocal != tt.wantLocal {
+				t.Errorf("ParseRefspec(%q) = (%q, %q), want (%q, %q)",
+					tt.arg, gotRemote, gotLocal, tt.wantRemote, tt.wantLocal)
+			}
+		})
+	}
+}
+
 func TestEnsureRemote(t *testing.T) {
 	tests := []struct {
-		name    string
-		setup   func(t *testing.T)
-		wantURL string
+		name     string
+		setup    func(t *testing.T)
+		wantURL  string
 	}{
 		{
 			name:    "adds remote when missing",

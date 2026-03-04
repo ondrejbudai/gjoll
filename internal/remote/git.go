@@ -7,6 +7,25 @@ import (
 	"strings"
 )
 
+// ParseRefspec splits a refspec string on the first ":" into remote and local
+// branch names. An empty string for either side means "use default".
+//
+// Examples:
+//
+//	""              → ("", "")
+//	"feature"       → ("feature", "")
+//	"feature:local" → ("feature", "local")
+//	":local"        → ("", "local")
+func ParseRefspec(arg string) (remoteBranch, localBranch string) {
+	if arg == "" {
+		return "", ""
+	}
+	if i := strings.IndexByte(arg, ':'); i >= 0 {
+		return arg[:i], arg[i+1:]
+	}
+	return arg, ""
+}
+
 // ensureRemote adds the named git remote if it doesn't exist, or updates its
 // URL if it does.
 func ensureRemote(remoteName, remoteURL string) error {
@@ -77,13 +96,16 @@ func GitPush(configPath, name, remotePath string) error {
 // GitPull fetches from the VM remote and creates a local branch.
 //
 // remotePath is the path to the repo on the VM (used to set up the remote if it
-// doesn't exist yet). When empty it defaults to "~/project".
-func GitPull(configPath, name, remotePath, branchName string) error {
+// doesn't exist yet). remoteBranch selects which branch to fetch; when empty the
+// remote HEAD is detected automatically with a fallback to main/master.
+// localBranch is the local branch name to create; when empty it defaults to
+// "gjoll/<name>".
+func GitPull(configPath, name, remotePath, remoteBranch, localBranch string) error {
 	if remotePath == "" {
 		remotePath = "~/project"
 	}
-	if branchName == "" {
-		branchName = "gjoll/" + name
+	if localBranch == "" {
+		localBranch = "gjoll/" + name
 	}
 
 	sshCmd := fmt.Sprintf("ssh -F '%s'", configPath)
@@ -104,40 +126,45 @@ func GitPull(configPath, name, remotePath, branchName string) error {
 	}
 
 	// Determine which remote branch to check out.
-	// Try resolving HEAD from the remote first, then fall back to common names.
-	var remoteBranch string
-	refCmd := exec.Command("git", "remote", "show", remoteName)
-	refCmd.Env = append(os.Environ(), "GIT_SSH_COMMAND="+sshCmd)
-	if refOutput, err := refCmd.Output(); err == nil {
-		for _, line := range strings.Split(string(refOutput), "\n") {
-			line = strings.TrimSpace(line)
-			if strings.HasPrefix(line, "HEAD branch:") {
-				branch := strings.TrimSpace(strings.TrimPrefix(line, "HEAD branch:"))
-				if branch != "(unknown)" {
-					remoteBranch = remoteName + "/" + branch
+	remoteRef := ""
+	if remoteBranch != "" {
+		// Explicit branch — use it directly.
+		remoteRef = remoteName + "/" + remoteBranch
+	} else {
+		// Try resolving HEAD from the remote first, then fall back to common names.
+		refCmd := exec.Command("git", "remote", "show", remoteName)
+		refCmd.Env = append(os.Environ(), "GIT_SSH_COMMAND="+sshCmd)
+		if refOutput, err := refCmd.Output(); err == nil {
+			for _, line := range strings.Split(string(refOutput), "\n") {
+				line = strings.TrimSpace(line)
+				if strings.HasPrefix(line, "HEAD branch:") {
+					branch := strings.TrimSpace(strings.TrimPrefix(line, "HEAD branch:"))
+					if branch != "(unknown)" {
+						remoteRef = remoteName + "/" + branch
+					}
+					break
 				}
-				break
+			}
+		}
+
+		// Fallback: try common branch names
+		if remoteRef == "" {
+			for _, ref := range []string{"main", "master"} {
+				candidate := remoteName + "/" + ref
+				cmd := exec.Command("git", "rev-parse", "--verify", candidate)
+				if cmd.Run() == nil {
+					remoteRef = candidate
+					break
+				}
 			}
 		}
 	}
 
-	// Fallback: try common branch names
-	if remoteBranch == "" {
-		for _, ref := range []string{"main", "master"} {
-			candidate := remoteName + "/" + ref
-			cmd := exec.Command("git", "rev-parse", "--verify", candidate)
-			if cmd.Run() == nil {
-				remoteBranch = candidate
-				break
-			}
-		}
-	}
-
-	if remoteBranch == "" {
+	if remoteRef == "" {
 		return fmt.Errorf("could not determine branch on remote %s", remoteName)
 	}
 
-	checkoutCmd := exec.Command("git", "checkout", "-B", branchName, remoteBranch)
+	checkoutCmd := exec.Command("git", "checkout", "-B", localBranch, remoteRef)
 	checkoutCmd.Stdout = os.Stdout
 	checkoutCmd.Stderr = os.Stderr
 	return checkoutCmd.Run()
