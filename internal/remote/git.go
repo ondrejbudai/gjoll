@@ -7,6 +7,23 @@ import (
 	"strings"
 )
 
+// ensureRemote adds the named git remote if it doesn't exist, or updates its
+// URL if it does.
+func ensureRemote(remoteName, remoteURL string) error {
+	if remoteExists(remoteName) {
+		cmd := exec.Command("git", "remote", "set-url", remoteName, remoteURL)
+		if err := cmd.Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: updating git remote %s: %v\n", remoteName, err)
+		}
+	} else {
+		cmd := exec.Command("git", "remote", "add", remoteName, remoteURL)
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("adding git remote: %w", err)
+		}
+	}
+	return nil
+}
+
 // GitPush pushes the current local git repo to the VM.
 // It sets up the remote repo on first push and adds/updates the git remote locally.
 func GitPush(configPath, name, remotePath string) error {
@@ -28,18 +45,8 @@ func GitPush(configPath, name, remotePath string) error {
 	}
 
 	remoteURL := fmt.Sprintf("%s:%s", name, remotePath)
-
-	// Add or update git remote
-	if remoteExists(remoteName) {
-		cmd := exec.Command("git", "remote", "set-url", remoteName, remoteURL)
-		if err := cmd.Run(); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: updating git remote %s: %v\n", remoteName, err)
-		}
-	} else {
-		cmd := exec.Command("git", "remote", "add", remoteName, remoteURL)
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("adding git remote: %w", err)
-		}
+	if err := ensureRemote(remoteName, remoteURL); err != nil {
+		return err
 	}
 
 	// Push current branch
