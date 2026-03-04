@@ -46,7 +46,7 @@ gjoll down fedora-dev
 | `gjoll status <name>` | Show sandbox details |
 | `gjoll ssh <name>` | SSH into sandbox |
 | `gjoll push <name> [--path]` | Git push current repo to VM |
-| `gjoll pull <name> [branch]` | Git fetch from VM, create local branch |
+| `gjoll pull <name> [branch] [--path]` | Git fetch from VM, create local branch |
 | `gjoll cp <name> <src> <dest>` | Copy files (prefix remote paths with `:`) |
 
 ## Environment Files
@@ -81,6 +81,13 @@ See `examples/` for complete environment files.
 ## Git Sync
 
 `gjoll push` sets up the VM as a git remote using `receive.denyCurrentBranch=updateInstead`, so the working tree updates on push. `gjoll pull` fetches from the VM and creates a local branch. Both commands create the git remote automatically if it doesn't exist yet.
+
+Use `--path` to change where the repo lives on the VM (default `~/project`):
+
+```bash
+gjoll push my-vm --path ~/myapp
+gjoll pull my-vm --path ~/myapp
+```
 
 ## Development
 

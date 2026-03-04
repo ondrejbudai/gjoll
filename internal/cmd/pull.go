@@ -6,6 +6,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var pullPath string
+
 var pullCmd = &cobra.Command{
 	Use:   "pull <name> [branch-name]",
 	Short: "Git fetch from sandbox VM and create local branch",
@@ -27,6 +29,10 @@ without running "gjoll push" first.`,
 		}
 
 		configPath := remote.SSHConfigPath(instanceDir)
-		return remote.GitPull(configPath, name, "", branchName)
+		return remote.GitPull(configPath, name, pullPath, branchName)
 	},
+}
+
+func init() {
+	pullCmd.Flags().StringVar(&pullPath, "path", "~/project", "path to the git repo on the VM")
 }
