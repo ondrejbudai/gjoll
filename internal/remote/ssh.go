@@ -67,12 +67,21 @@ func Connect(configPath, name string) error {
 	return syscallExec(ssh, []string{"ssh", "-F", configPath, name}, os.Environ())
 }
 
+// scpHost wraps IPv6 addresses in brackets for SCP targets (user@[ip]:path).
+// SSH commands handle bare IPv6 addresses natively and must NOT use brackets.
+func scpHost(ip string) string {
+	if strings.Contains(ip, ":") {
+		return "[" + ip + "]"
+	}
+	return ip
+}
+
 // WaitForSSH polls until SSH is reachable or timeout expires.
 func WaitForSSH(ip, user, keyPath string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 
 	for time.Now().Before(deadline) {
-		conn, err := net.DialTimeout("tcp", ip+":22", 5*time.Second)
+		conn, err := net.DialTimeout("tcp", net.JoinHostPort(ip, "22"), 5*time.Second)
 		if err == nil {
 			_ = conn.Close()
 			// TCP is open, try actual SSH
@@ -121,11 +130,12 @@ func RunScript(ip, user, keyPath, content string) error {
 		"-o", "LogLevel=ERROR",
 		"-i", keyPath,
 	}
-	target := fmt.Sprintf("%s@%s", user, ip)
+	sshTarget := fmt.Sprintf("%s@%s", user, ip)
+	scpTarget := fmt.Sprintf("%s@%s", user, scpHost(ip))
 
 	// Upload
 	scpArgs := append([]string{"scp"}, sshOpts...)
-	scpArgs = append(scpArgs, tmpFile.Name(), target+":/tmp/gjoll-init.sh")
+	scpArgs = append(scpArgs, tmpFile.Name(), scpTarget+":/tmp/gjoll-init.sh")
 	scp := exec.Command(scpArgs[0], scpArgs[1:]...)
 	scp.Stdout = os.Stdout
 	scp.Stderr = os.Stderr
@@ -135,7 +145,7 @@ func RunScript(ip, user, keyPath, content string) error {
 
 	// Execute
 	sshArgs := append([]string{"ssh"}, sshOpts...)
-	sshArgs = append(sshArgs, target, "chmod +x /tmp/gjoll-init.sh && /tmp/gjoll-init.sh")
+	sshArgs = append(sshArgs, sshTarget, "chmod +x /tmp/gjoll-init.sh && /tmp/gjoll-init.sh")
 	ssh := exec.Command(sshArgs[0], sshArgs[1:]...)
 	ssh.Stdout = os.Stdout
 	ssh.Stderr = os.Stderr
@@ -180,13 +190,14 @@ func CopySecret(ip, user, keyPath, localPath, remotePath string) error {
 		"-o", "LogLevel=ERROR",
 		"-i", keyPath,
 	}
-	target := fmt.Sprintf("%s@%s", user, ip)
+	sshTarget := fmt.Sprintf("%s@%s", user, ip)
+	scpTarget := fmt.Sprintf("%s@%s", user, scpHost(ip))
 
 	// Ensure remote directory exists.
 	// Use the remote shell to expand ~ so it resolves to the remote user's home.
 	remoteDir := path.Dir(remotePath)
 	mkdirArgs := append([]string{"ssh"}, sshOpts...)
-	mkdirArgs = append(mkdirArgs, target, "mkdir -p "+remoteDir)
+	mkdirArgs = append(mkdirArgs, sshTarget, "mkdir -p "+remoteDir)
 	mkdir := execCommand(mkdirArgs[0], mkdirArgs[1:]...)
 	mkdir.Stdout = os.Stdout
 	mkdir.Stderr = os.Stderr
@@ -197,7 +208,7 @@ func CopySecret(ip, user, keyPath, localPath, remotePath string) error {
 	// Copy file with preserved permissions.
 	// scp resolves ~ on the remote side, so pass remotePath unexpanded.
 	scpArgs := append([]string{"scp", "-p"}, sshOpts...)
-	scpArgs = append(scpArgs, local, target+":"+remotePath)
+	scpArgs = append(scpArgs, local, scpTarget+":"+remotePath)
 	scp := execCommand(scpArgs[0], scpArgs[1:]...)
 	scp.Stdout = os.Stdout
 	scp.Stderr = os.Stderr

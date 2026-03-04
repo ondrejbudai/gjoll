@@ -85,49 +85,83 @@ func TestCopySecretMissingFile(t *testing.T) {
 	}
 }
 
-func TestCopySecretDoesNotExpandRemoteTilde(t *testing.T) {
-	localFile := filepath.Join(t.TempDir(), "creds.json")
-	if err := os.WriteFile(localFile, []byte(`{}`), 0600); err != nil {
-		t.Fatalf("WriteFile() error: %v", err)
-	}
-
-	// Capture all commands executed by CopySecret.
-	var commands [][]string
-	original := execCommand
-	execCommand = func(name string, args ...string) *exec.Cmd {
-		commands = append(commands, append([]string{name}, args...))
-		return exec.Command("true") // no-op
-	}
-	t.Cleanup(func() { execCommand = original })
-
-	remotePath := "~/.config/gcloud/application_default_credentials.json"
-	err := CopySecret("1.2.3.4", "fedora", "/fake/key", localFile, remotePath)
-	if err != nil {
-		t.Fatalf("CopySecret() unexpected error: %v", err)
-	}
-
-	if len(commands) != 2 {
-		t.Fatalf("expected 2 commands (mkdir + scp), got %d", len(commands))
-	}
-
+func TestCopySecret(t *testing.T) {
 	home, _ := os.UserHomeDir()
 
-	// The mkdir command should contain the unexpanded ~ path.
-	mkdirCmd := strings.Join(commands[0], " ")
-	if !strings.Contains(mkdirCmd, "~/.config/gcloud") {
-		t.Errorf("mkdir command = %q, want it to contain unexpanded ~", mkdirCmd)
-	}
-	if strings.Contains(mkdirCmd, home) {
-		t.Errorf("mkdir command = %q, should not contain local home %q", mkdirCmd, home)
+	tests := []struct {
+		name       string
+		ip         string
+		remotePath string
+		checks     func(t *testing.T, commands [][]string)
+	}{
+		{
+			name:       "does not expand remote tilde",
+			ip:         "1.2.3.4",
+			remotePath: "~/.config/gcloud/application_default_credentials.json",
+			checks: func(t *testing.T, commands [][]string) {
+				mkdirCmd := strings.Join(commands[0], " ")
+				if !strings.Contains(mkdirCmd, "~/.config/gcloud") {
+					t.Errorf("mkdir command = %q, want it to contain unexpanded ~", mkdirCmd)
+				}
+				if strings.Contains(mkdirCmd, home) {
+					t.Errorf("mkdir command = %q, should not contain local home %q", mkdirCmd, home)
+				}
+
+				scpCmd := strings.Join(commands[1], " ")
+				if !strings.Contains(scpCmd, ":~/.config/gcloud/application_default_credentials.json") {
+					t.Errorf("scp command = %q, want it to contain unexpanded remote path", scpCmd)
+				}
+				if strings.Contains(scpCmd, home) {
+					t.Errorf("scp command = %q, should not contain local home %q", scpCmd, home)
+				}
+			},
+		},
+		{
+			name:       "IPv6 brackets only for scp",
+			ip:         "2a03:3b40:282:1000:be24:11ff:fed8:71bf",
+			remotePath: "/remote/dest",
+			checks: func(t *testing.T, commands [][]string) {
+				// ssh mkdir: bare IPv6, no brackets
+				mkdirCmd := strings.Join(commands[0], " ")
+				if !strings.Contains(mkdirCmd, "fedora@2a03:3b40:282:1000:be24:11ff:fed8:71bf") {
+					t.Errorf("ssh command = %q, want bare IPv6 (no brackets)", mkdirCmd)
+				}
+
+				// scp: bracketed IPv6
+				scpCmd := strings.Join(commands[1], " ")
+				if !strings.Contains(scpCmd, "fedora@[2a03:3b40:282:1000:be24:11ff:fed8:71bf]:/remote/dest") {
+					t.Errorf("scp command = %q, want bracketed IPv6 with path", scpCmd)
+				}
+			},
+		},
 	}
 
-	// The scp command should contain the unexpanded ~ path in the target.
-	scpCmd := strings.Join(commands[1], " ")
-	if !strings.Contains(scpCmd, ":"+remotePath) {
-		t.Errorf("scp command = %q, want it to contain %q", scpCmd, ":"+remotePath)
-	}
-	if strings.Contains(scpCmd, home) {
-		t.Errorf("scp command = %q, should not contain local home %q", scpCmd, home)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			localFile := filepath.Join(t.TempDir(), "creds.json")
+			if err := os.WriteFile(localFile, []byte(`{}`), 0600); err != nil {
+				t.Fatalf("WriteFile() error: %v", err)
+			}
+
+			var commands [][]string
+			original := execCommand
+			execCommand = func(name string, args ...string) *exec.Cmd {
+				commands = append(commands, append([]string{name}, args...))
+				return exec.Command("true")
+			}
+			t.Cleanup(func() { execCommand = original })
+
+			err := CopySecret(tt.ip, "fedora", "/fake/key", localFile, tt.remotePath)
+			if err != nil {
+				t.Fatalf("CopySecret() unexpected error: %v", err)
+			}
+
+			if len(commands) != 2 {
+				t.Fatalf("expected 2 commands (mkdir + scp), got %d", len(commands))
+			}
+
+			tt.checks(t, commands)
+		})
 	}
 }
 
