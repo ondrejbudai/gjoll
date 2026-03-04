@@ -75,16 +75,23 @@ func GitPush(configPath, name, remotePath string) error {
 }
 
 // GitPull fetches from the VM remote and creates a local branch.
-func GitPull(configPath, name, branchName string) error {
+//
+// remotePath is the path to the repo on the VM (used to set up the remote if it
+// doesn't exist yet). When empty it defaults to "~/project".
+func GitPull(configPath, name, remotePath, branchName string) error {
+	if remotePath == "" {
+		remotePath = "~/project"
+	}
 	if branchName == "" {
 		branchName = "gjoll/" + name
 	}
 
 	sshCmd := fmt.Sprintf("ssh -F '%s'", configPath)
 	remoteName := "gjoll-" + name
+	remoteURL := fmt.Sprintf("%s:%s", name, remotePath)
 
-	if !remoteExists(remoteName) {
-		return fmt.Errorf("git remote %q not found — run 'gjoll push' first", remoteName)
+	if err := ensureRemote(remoteName, remoteURL); err != nil {
+		return err
 	}
 
 	// Fetch

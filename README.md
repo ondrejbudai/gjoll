@@ -80,7 +80,7 @@ See `examples/` for complete environment files.
 
 ## Git Sync
 
-`gjoll push` sets up the VM as a git remote using `receive.denyCurrentBranch=updateInstead`, so the working tree updates on push. `gjoll pull` fetches from the VM and creates a local branch.
+`gjoll push` sets up the VM as a git remote using `receive.denyCurrentBranch=updateInstead`, so the working tree updates on push. `gjoll pull` fetches from the VM and creates a local branch. Both commands create the git remote automatically if it doesn't exist yet.
 
 ## Development
 
