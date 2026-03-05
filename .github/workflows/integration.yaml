@@ -18,13 +18,13 @@ jobs:
 
       - name: Install dependencies
         run: |
-          apt update
-          apt install -y opentofu libvirt-daemon-system qemu-kvm
+          sudo apt update
+          sudo apt install -y opentofu libvirt-daemon-system qemu-kvm
 
       - name: Start libvirt
         run: |
-          systemctl start libvirtd
-          virsh net-start default
+          sudo systemctl start libvirtd
+          sudo virsh net-start default
 
       - name: Build gjoll
         run: go build -o gjoll ./cmd/gjoll
