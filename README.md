@@ -24,6 +24,9 @@ gjoll up examples/fedora-dev.tf
 # SSH in
 gjoll ssh fedora-dev
 
+# Run a command over SSH
+gjoll ssh fedora-dev uname -a
+
 # Push your current repo to the VM
 gjoll push fedora-dev
 
@@ -46,7 +49,7 @@ gjoll down fedora-dev
 | `gjoll down <name>` | Destroy VM and all resources |
 | `gjoll list` | List all sandboxes |
 | `gjoll status <name>` | Show sandbox details |
-| `gjoll ssh <name>` | SSH into sandbox |
+| `gjoll ssh <name> [command...]` | SSH into sandbox (or run a command) |
 | `gjoll push <name> [--path]` | Git push current repo to VM |
 | `gjoll pull <name> [refspec] [--path]` | Git fetch from VM, create local branch |
 | `gjoll cp <name> <src> <dest>` | Copy files (prefix remote paths with `:`) |
@@ -104,8 +107,13 @@ gjoll pull my-vm :my-branch              # auto-detect remote branch → my-bran
 ## Development
 
 ```bash
-just build    # Build binary
-just test     # Run tests
-just lint     # Vet + golangci-lint
-just all      # fmt + lint + test + build
+just build         # Build binary
+just test          # Run unit tests
+just integration   # Run integration tests (requires libvirt)
+just lint          # Vet + golangci-lint
+just all           # fmt + lint + test + build
 ```
+
+The integration tests provision a real VM via libvirt/QEMU and exercise all
+commands (`up`, `list`, `status`, `ssh`, `cp`, `push`, `pull`, `down`).
+Prerequisites: `tofu`, `qemu-kvm`, `libvirt`, and a running `default` network.
