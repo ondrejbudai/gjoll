@@ -6,24 +6,15 @@ terraform {
 
 provider "libvirt" { uri = "qemu:///system" }
 
-resource "libvirt_volume" "base" {
-  name   = "fedora-base-${var.gjoll_name}.qcow2"
-  pool   = "default"
-  create = {
-    content = {
-      url = "https://download.fedoraproject.org/pub/fedora/linux/releases/43/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-43-1.6.x86_64.qcow2"
-    }
-  }
-}
-
 resource "libvirt_volume" "root" {
   name     = "root-${var.gjoll_name}.qcow2"
   pool     = "default"
   capacity = 53687091200 # 50 GiB
   target   = { format = { type = "qcow2" } }
-  backing_store = {
-    path   = libvirt_volume.base.key
-    format = { type = "qcow2" }
+  create = {
+    content = {
+      url = "https://download.fedoraproject.org/pub/fedora/linux/releases/43/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-43-1.6.x86_64.qcow2"
+    }
   }
 }
 
