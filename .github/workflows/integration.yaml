@@ -32,6 +32,7 @@ jobs:
 
       - name: Start libvirt
         run: |
+          sudo usermod -aG libvirt $USER
           sudo systemctl start libvirtd
           sudo virsh net-start default || true
 
@@ -39,7 +40,7 @@ jobs:
         run: go build -o gjoll ./cmd/gjoll
 
       - name: Provision VM
-        run: ./gjoll up examples/fedora-libvirt.tf
+        run: sg libvirt -c './gjoll up examples/fedora-libvirt.tf'
 
       - name: Verify SSH access
         run: |
@@ -48,4 +49,4 @@ jobs:
 
       - name: Tear down
         if: always()
-        run: ./gjoll down fedora-libvirt || true
+        run: sg libvirt -c './gjoll down fedora-libvirt' || true
