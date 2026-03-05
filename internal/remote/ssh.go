@@ -58,13 +58,28 @@ func SSHConfigPath(instanceDir string) string {
 }
 
 // Connect execs into an SSH session for the named sandbox.
-func Connect(configPath, name string) error {
-	ssh, err := exec.LookPath("ssh")
+// If command is non-empty, it is passed as extra arguments to ssh.
+// When a command is given, it is run as a subprocess and its exit status is
+// returned. Without a command, the current process is replaced via exec(2)
+// for a fully interactive session.
+func Connect(configPath, name string, command ...string) error {
+	sshPath, err := exec.LookPath("ssh")
 	if err != nil {
 		return fmt.Errorf("ssh not found: %w", err)
 	}
 
-	return syscallExec(ssh, []string{"ssh", "-F", configPath, name}, os.Environ())
+	argv := []string{"ssh", "-F", configPath, name}
+	argv = append(argv, command...)
+
+	if len(command) == 0 {
+		return syscallExec(sshPath, argv, os.Environ())
+	}
+
+	cmd := exec.Command(sshPath, argv[1:]...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 // scpHost wraps IPv6 addresses in brackets for SCP targets (user@[ip]:path).

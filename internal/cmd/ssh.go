@@ -8,9 +8,18 @@ import (
 )
 
 var sshCmd = &cobra.Command{
-	Use:   "ssh <name>",
+	Use:   "ssh <name> [-- command...]",
 	Short: "SSH into a running sandbox",
-	Args:  cobra.ExactArgs(1),
+	Long: `Opens an interactive SSH session to the named sandbox.
+
+If a command is given after --, it is executed on the sandbox instead of
+starting an interactive shell.
+
+Examples:
+  gjoll ssh mybox              Interactive shell
+  gjoll ssh mybox -- uname -a  Run a command`,
+	Args:               cobra.MinimumNArgs(1),
+	DisableFlagParsing: false,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
 
@@ -25,6 +34,10 @@ var sshCmd = &cobra.Command{
 		}
 
 		configPath := remote.SSHConfigPath(instanceDir)
-		return remote.Connect(configPath, name)
+		return remote.Connect(configPath, name, args[1:]...)
 	},
+}
+
+func init() {
+	sshCmd.Flags().SetInterspersed(false)
 }
