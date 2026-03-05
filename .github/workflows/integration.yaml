@@ -35,6 +35,8 @@ jobs:
           sudo usermod -aG libvirt $USER
           sudo systemctl start libvirtd
           sudo virsh net-start default || true
+          sudo virsh pool-define-as default dir --target /var/lib/libvirt/images
+          sudo virsh pool-start default
 
       - name: Build gjoll
         run: go build -o gjoll ./cmd/gjoll
