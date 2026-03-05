@@ -1,5 +1,7 @@
 # gjoll
 
+> **Experimental**: This project is experimental, may change at any time, and is unsupported.
+
 A CLI tool to provision cloud VM sandboxes for coding agents. Each environment is a standard OpenTofu `.tf` file — you get the full power of HCL with no abstractions in the way. Supports any provider with an OpenTofu provider (AWS, Proxmox, etc.).
 
 ## Install
