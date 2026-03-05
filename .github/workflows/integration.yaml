@@ -33,7 +33,7 @@ jobs:
       - name: Start libvirt
         run: |
           sudo systemctl start libvirtd
-          sudo virsh net-start default
+          sudo virsh net-start default || true
 
       - name: Build gjoll
         run: go build -o gjoll ./cmd/gjoll
