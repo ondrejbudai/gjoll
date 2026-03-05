@@ -1,21 +1,28 @@
 terraform {
   required_providers {
-    libvirt = { source = "dmacvicar/libvirt", version = "~> 0.8" }
+    libvirt = { source = "dmacvicar/libvirt", version = "~> 0.9" }
   }
 }
 
 provider "libvirt" { uri = "qemu:///system" }
 
-resource "libvirt_volume" "root" {
-  name     = "root-${var.gjoll_name}.qcow2"
-  pool     = "default"
-  capacity = 53687091200 # 50 GiB
-  target   = { format = { type = "qcow2" } }
+resource "libvirt_volume" "base" {
+  name   = "fedora-base-${var.gjoll_name}.qcow2"
+  pool   = "default"
+  target = { format = { type = "qcow2" } }
   create = {
     content = {
       url = "https://download.fedoraproject.org/pub/fedora/linux/releases/43/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-43-1.6.x86_64.qcow2"
     }
   }
+}
+
+resource "libvirt_volume" "root" {
+  name          = "root-${var.gjoll_name}.qcow2"
+  pool          = "default"
+  capacity      = 53687091200 # 50 GiB
+  target        = { format = { type = "qcow2" } }
+  backing_store = { path = libvirt_volume.base.path, format = { type = "qcow2" } }
 }
 
 resource "libvirt_cloudinit_disk" "init" {
@@ -48,7 +55,9 @@ resource "libvirt_domain" "sandbox" {
   devices = {
     disks = [
       {
-        source = { volume = { pool = "default", volume = libvirt_volume.root.name } }
+        # Use source.file (disk type='file') instead of source.volume so that
+        # virt-aa-helper can resolve the path and whitelist it in AppArmor.
+        source = { file = { file = libvirt_volume.root.path } }
         target = { dev = "vda", bus = "virtio" }
         driver = { name = "qemu", type = "qcow2" }
       },
