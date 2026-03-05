@@ -1,0 +1,42 @@
+name: Integration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  libvirt:
+    runs-on: docker
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
+        with:
+          go-version-file: go.mod
+
+      - name: Install dependencies
+        run: |
+          apt update
+          apt install -y opentofu libvirt-daemon-system qemu-kvm
+
+      - name: Start libvirt
+        run: |
+          systemctl start libvirtd
+          virsh net-start default
+
+      - name: Build gjoll
+        run: go build -o gjoll ./cmd/gjoll
+
+      - name: Provision VM
+        run: ./gjoll up examples/fedora-libvirt.tf
+
+      - name: Verify SSH access
+        run: |
+          ssh -F ~/.local/share/gjoll/instances/fedora-libvirt/ssh_config \
+            fedora-libvirt uname -a
+
+      - name: Tear down
+        if: always()
+        run: ./gjoll down fedora-libvirt || true
