@@ -6,15 +6,9 @@ terraform {
 
 provider "libvirt" { uri = "qemu:///system" }
 
-resource "libvirt_pool" "gjoll" {
-  name   = "gjoll-${var.gjoll_name}"
-  type   = "dir"
-  target = { path = "/var/lib/libvirt/pools/gjoll-${var.gjoll_name}" }
-}
-
 resource "libvirt_volume" "base" {
   name   = "fedora-base-${var.gjoll_name}.qcow2"
-  pool   = libvirt_pool.gjoll.name
+  pool   = "default"
   create = {
     content = {
       url = "https://download.fedoraproject.org/pub/fedora/linux/releases/43/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-43-1.6.x86_64.qcow2"
@@ -24,7 +18,7 @@ resource "libvirt_volume" "base" {
 
 resource "libvirt_volume" "root" {
   name     = "root-${var.gjoll_name}.qcow2"
-  pool     = libvirt_pool.gjoll.name
+  pool     = "default"
   capacity = 53687091200 # 50 GiB
   target   = { format = { type = "qcow2" } }
   backing_store = {
@@ -63,7 +57,7 @@ resource "libvirt_domain" "sandbox" {
   devices = {
     disks = [
       {
-        source = { volume = { pool = libvirt_pool.gjoll.name, volume = libvirt_volume.root.name } }
+        source = { volume = { pool = "default", volume = libvirt_volume.root.name } }
         target = { dev = "vda", bus = "virtio" }
         driver = { name = "qemu", type = "qcow2" }
       },
