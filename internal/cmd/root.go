@@ -23,4 +23,5 @@ func init() {
 	rootCmd.AddCommand(pushCmd)
 	rootCmd.AddCommand(pullCmd)
 	rootCmd.AddCommand(cpCmd)
+	rootCmd.AddCommand(proxyCmd)
 }
