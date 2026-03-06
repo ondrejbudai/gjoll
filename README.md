@@ -53,6 +53,7 @@ gjoll down fedora-dev
 | `gjoll push <name> [--path]` | Git push current repo to VM |
 | `gjoll pull <name> [refspec] [--path]` | Git fetch from VM, create local branch |
 | `gjoll cp <name> <src> <dest>` | Copy files (prefix remote paths with `:`) |
+| `gjoll proxy <name>` | Start credential-injecting proxy with SSH reverse tunnel |
 
 ## Environment Files
 
@@ -70,6 +71,7 @@ Environments are standard `.tf` files. gjoll injects two variables and reads out
 **Optional outputs:**
 - `init_script` — bash script run over SSH after boot
 - `clone_secrets` — list of `{from, to}` objects; copies local files to the VM after init. If `to` is omitted, it defaults to the same path as `from`
+- `proxy` — HTTP reverse proxy configuration for credential-free API access (see [Proxy](#proxy) below)
 
 See `examples/` for complete environment files.
 
@@ -103,6 +105,71 @@ gjoll pull my-vm feature                 # fetch "feature" → gjoll/my-vm
 gjoll pull my-vm feature:my-branch       # fetch "feature" → my-branch
 gjoll pull my-vm :my-branch              # auto-detect remote branch → my-branch
 ```
+
+## Proxy
+
+The `gjoll proxy` command enables secure API access from sandboxed VMs **without copying credentials to the VM**. It runs a local HTTP reverse proxy that injects authentication headers (GCP Application Default Credentials or API keys) and creates an SSH reverse tunnel to the VM. This is ideal for tools like Claude Code running in sandboxes that need to call cloud APIs.
+
+### How it works
+
+```
+App on VM  →  http://localhost:18080
+           →  SSH reverse tunnel (-R 18080:127.0.0.1:<local-port>)
+           →  Local proxy on host (127.0.0.1:<local-port>)
+           →  Injects auth header (GCP Bearer token or API key)
+           →  https://<target>
+```
+
+All credentials stay on your local machine. The VM never sees any secrets.
+
+### Configuration
+
+Add a `proxy` output to your `.tf` file:
+
+```hcl
+# Example: Vertex AI for Claude Code
+output "proxy" {
+  value = {
+    target = "https://us-east5-aiplatform.googleapis.com"
+    auth   = "gcp"          # "gcp" or "api-key"
+    port   = 18080          # optional, defaults to 18080
+  }
+}
+
+# Example: Direct Anthropic API
+output "proxy" {
+  value = {
+    target       = "https://api.anthropic.com"
+    auth         = "api-key"
+    api_key_file = "~/.anthropic/api_key"  # required for api-key auth
+    port         = 18080
+  }
+}
+```
+
+Fields:
+- `target` (required) — upstream URL to forward requests to
+- `auth` (required) — `"gcp"` or `"api-key"`
+- `api_key_file` (required for `api-key` auth) — local path to API key file (~ expanded)
+- `port` (optional, default 18080) — remote port on VM for the tunnel
+
+### Usage
+
+```bash
+# Provision VM with proxy config
+gjoll up examples/ubuntu-claude-vertex.tf
+
+# Terminal 1: Start proxy (keeps running)
+gjoll proxy mybox
+
+# Terminal 2: SSH to VM and use API
+gjoll ssh mybox
+curl http://localhost:18080/v1/messages  # authenticated request
+```
+
+Applications on the VM connect to `http://localhost:<port>` and `gjoll proxy` handles the rest.
+
+See `examples/ubuntu-claude-vertex.tf` for a complete Vertex AI + Claude Code setup.
 
 ## Development
 

@@ -11,6 +11,14 @@ type SecretMapping struct {
 	To   string
 }
 
+// ProxyConfig defines an HTTP reverse proxy with credential injection.
+type ProxyConfig struct {
+	Target     string `json:"target"`       // upstream URL (e.g., https://api.anthropic.com)
+	Auth       string `json:"auth"`         // "gcp" or "api-key"
+	APIKeyFile string `json:"api_key_file"` // local path to API key file (for api-key auth)
+	Port       int    `json:"port"`         // remote tunnel port (default 18080)
+}
+
 // Outputs holds the parsed values from `tofu output -json`.
 type Outputs struct {
 	PublicIP     string
@@ -18,6 +26,7 @@ type Outputs struct {
 	SSHUser      string
 	InitScript   string          // optional
 	CloneSecrets []SecretMapping // optional
+	Proxy        *ProxyConfig    // optional
 }
 
 // tofuOutput is the structure of a single output value from `tofu output -json`.
@@ -68,6 +77,28 @@ func ParseOutputs(data []byte) (*Outputs, error) {
 					to = from
 				}
 				o.CloneSecrets = append(o.CloneSecrets, SecretMapping{From: from, To: to})
+			}
+		}
+	}
+
+	// Parse optional proxy config
+	if out, ok := raw["proxy"]; ok {
+		if m, ok := out.Value.(map[string]any); ok {
+			target, _ := m["target"].(string)
+			auth, _ := m["auth"].(string)
+			if target != "" && auth != "" {
+				proxy := &ProxyConfig{
+					Target: target,
+					Auth:   auth,
+					Port:   18080, // default
+				}
+				if apiKeyFile, ok := m["api_key_file"].(string); ok {
+					proxy.APIKeyFile = apiKeyFile
+				}
+				if port, ok := m["port"].(float64); ok {
+					proxy.Port = int(port)
+				}
+				o.Proxy = proxy
 			}
 		}
 	}

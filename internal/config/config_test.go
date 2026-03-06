@@ -181,3 +181,144 @@ func TestParseOutputsEmptyValue(t *testing.T) {
 		t.Fatal("ParseOutputs() expected error for empty public_ip")
 	}
 }
+
+func TestParseOutputsProxyGCP(t *testing.T) {
+	data := []byte(`{
+		"public_ip": {"value": "1.2.3.4", "type": "string"},
+		"instance_id": {"value": "i-abc123", "type": "string"},
+		"ssh_user": {"value": "ubuntu", "type": "string"},
+		"proxy": {"value": {
+			"target": "https://us-east5-aiplatform.googleapis.com",
+			"auth": "gcp",
+			"port": 18080
+		}, "type": "object"}
+	}`)
+
+	o, err := ParseOutputs(data)
+	if err != nil {
+		t.Fatalf("ParseOutputs() error: %v", err)
+	}
+	if o.Proxy == nil {
+		t.Fatal("Proxy = nil, want non-nil")
+	}
+	if o.Proxy.Target != "https://us-east5-aiplatform.googleapis.com" {
+		t.Errorf("Proxy.Target = %q, want %q", o.Proxy.Target, "https://us-east5-aiplatform.googleapis.com")
+	}
+	if o.Proxy.Auth != "gcp" {
+		t.Errorf("Proxy.Auth = %q, want %q", o.Proxy.Auth, "gcp")
+	}
+	if o.Proxy.Port != 18080 {
+		t.Errorf("Proxy.Port = %d, want 18080", o.Proxy.Port)
+	}
+}
+
+func TestParseOutputsProxyAPIKey(t *testing.T) {
+	data := []byte(`{
+		"public_ip": {"value": "1.2.3.4", "type": "string"},
+		"instance_id": {"value": "i-abc123", "type": "string"},
+		"ssh_user": {"value": "ubuntu", "type": "string"},
+		"proxy": {"value": {
+			"target": "https://api.anthropic.com",
+			"auth": "api-key",
+			"api_key_file": "~/.anthropic/api_key",
+			"port": 9000
+		}, "type": "object"}
+	}`)
+
+	o, err := ParseOutputs(data)
+	if err != nil {
+		t.Fatalf("ParseOutputs() error: %v", err)
+	}
+	if o.Proxy == nil {
+		t.Fatal("Proxy = nil, want non-nil")
+	}
+	if o.Proxy.Target != "https://api.anthropic.com" {
+		t.Errorf("Proxy.Target = %q, want %q", o.Proxy.Target, "https://api.anthropic.com")
+	}
+	if o.Proxy.Auth != "api-key" {
+		t.Errorf("Proxy.Auth = %q, want %q", o.Proxy.Auth, "api-key")
+	}
+	if o.Proxy.APIKeyFile != "~/.anthropic/api_key" {
+		t.Errorf("Proxy.APIKeyFile = %q, want %q", o.Proxy.APIKeyFile, "~/.anthropic/api_key")
+	}
+	if o.Proxy.Port != 9000 {
+		t.Errorf("Proxy.Port = %d, want 9000", o.Proxy.Port)
+	}
+}
+
+func TestParseOutputsProxyDefaultPort(t *testing.T) {
+	data := []byte(`{
+		"public_ip": {"value": "1.2.3.4", "type": "string"},
+		"instance_id": {"value": "i-abc123", "type": "string"},
+		"ssh_user": {"value": "ubuntu", "type": "string"},
+		"proxy": {"value": {
+			"target": "https://api.anthropic.com",
+			"auth": "gcp"
+		}, "type": "object"}
+	}`)
+
+	o, err := ParseOutputs(data)
+	if err != nil {
+		t.Fatalf("ParseOutputs() error: %v", err)
+	}
+	if o.Proxy == nil {
+		t.Fatal("Proxy = nil, want non-nil")
+	}
+	if o.Proxy.Port != 18080 {
+		t.Errorf("Proxy.Port = %d, want 18080 (default)", o.Proxy.Port)
+	}
+}
+
+func TestParseOutputsOptionalProxy(t *testing.T) {
+	data := []byte(`{
+		"public_ip": {"value": "1.2.3.4", "type": "string"},
+		"instance_id": {"value": "i-abc123", "type": "string"},
+		"ssh_user": {"value": "ubuntu", "type": "string"}
+	}`)
+
+	o, err := ParseOutputs(data)
+	if err != nil {
+		t.Fatalf("ParseOutputs() error: %v", err)
+	}
+	if o.Proxy != nil {
+		t.Errorf("Proxy = %+v, want nil", o.Proxy)
+	}
+}
+
+func TestParseOutputsProxyMissingTarget(t *testing.T) {
+	data := []byte(`{
+		"public_ip": {"value": "1.2.3.4", "type": "string"},
+		"instance_id": {"value": "i-abc123", "type": "string"},
+		"ssh_user": {"value": "ubuntu", "type": "string"},
+		"proxy": {"value": {
+			"auth": "gcp"
+		}, "type": "object"}
+	}`)
+
+	o, err := ParseOutputs(data)
+	if err != nil {
+		t.Fatalf("ParseOutputs() error: %v", err)
+	}
+	if o.Proxy != nil {
+		t.Errorf("Proxy = %+v, want nil (missing target)", o.Proxy)
+	}
+}
+
+func TestParseOutputsProxyMissingAuth(t *testing.T) {
+	data := []byte(`{
+		"public_ip": {"value": "1.2.3.4", "type": "string"},
+		"instance_id": {"value": "i-abc123", "type": "string"},
+		"ssh_user": {"value": "ubuntu", "type": "string"},
+		"proxy": {"value": {
+			"target": "https://api.anthropic.com"
+		}, "type": "object"}
+	}`)
+
+	o, err := ParseOutputs(data)
+	if err != nil {
+		t.Fatalf("ParseOutputs() error: %v", err)
+	}
+	if o.Proxy != nil {
+		t.Errorf("Proxy = %+v, want nil (missing auth)", o.Proxy)
+	}
+}
