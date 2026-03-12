@@ -25,10 +25,10 @@ func singleJoiningSlash(a, b string) string {
 	return a + b
 }
 
-// Proxy is a reverse HTTP proxy that injects authentication headers.
+// Proxy is a reverse HTTP proxy that optionally injects authentication headers.
 type Proxy struct {
 	targetURL  *url.URL
-	authMode   string // "gcp" or "api-key"
+	authMode   string // "gcp", "api-key", or "" (no auth)
 	apiKey     string // for api-key mode
 	tokenSrc   oauth2.TokenSource // for gcp mode, injectable for testing
 	transport  http.RoundTripper   // custom transport (for testing TLS)
@@ -54,8 +54,7 @@ func WithTransport(t http.RoundTripper) Option {
 }
 
 // New creates a new Proxy. The target must be a full URL (https://...).
-// For authMode "gcp", uses Application Default Credentials.
-// For authMode "api-key", apiKey must be provided.
+// authMode can be "gcp", "api-key", or "" for no authentication.
 func New(target, authMode, apiKey string, opts ...Option) (*Proxy, error) {
 	targetURL, err := url.Parse(target)
 	if err != nil {
@@ -107,14 +106,18 @@ func (p *Proxy) Start(ctx context.Context) (int, error) {
 			}
 
 			// Inject authentication header
-			if p.authMode == "gcp" && p.tokenSrc != nil {
-				token, err := p.tokenSrc.Token()
-				if err == nil {
-					req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+			switch p.authMode {
+			case "gcp":
+				if p.tokenSrc != nil {
+					token, err := p.tokenSrc.Token()
+					if err == nil {
+						req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+					}
 				}
-			} else if p.authMode == "api-key" {
+			case "api-key":
 				req.Header.Set("x-api-key", p.apiKey)
 			}
+			// no auth: forward as-is
 		},
 	}
 

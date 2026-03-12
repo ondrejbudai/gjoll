@@ -113,10 +113,13 @@ output "init_script" {
 }
 
 # Proxy configuration for Vertex AI
-output "proxy" {
-  value = {
-    target = "https://us-east5-aiplatform.googleapis.com/v1"
-    auth   = "gcp"
-    port   = 18080
-  }
+output "proxies" {
+  value = [
+    {
+      name   = "vertex"
+      target = "https://us-east5-aiplatform.googleapis.com/v1"
+      auth   = "gcp"
+      port   = 18080
+    },
+  ]
 }

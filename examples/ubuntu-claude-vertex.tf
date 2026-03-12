@@ -103,12 +103,15 @@ output "init_script" {
 }
 
 # Proxy configuration — no secrets on VM!
-output "proxy" {
-  value = {
-    target = "https://us-east5-aiplatform.googleapis.com"
-    auth   = "gcp"
-    port   = 18080
-  }
+output "proxies" {
+  value = [
+    {
+      name   = "vertex"
+      target = "https://us-east5-aiplatform.googleapis.com"
+      auth   = "gcp"
+      port   = 18080
+    },
+  ]
 }
 
 # Note: No copy_files output — credentials stay on your local machine!

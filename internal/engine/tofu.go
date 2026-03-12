@@ -118,7 +118,7 @@ func Provision(name, envPath string) error {
 		SSHUser:    outputs.SSHUser,
 		Status:     "running",
 		CreatedAt:  time.Now(),
-		Proxy:      outputs.Proxy,
+		Proxies:    outputs.Proxies,
 	}
 	if err := state.Save(inst); err != nil {
 		return fmt.Errorf("saving state: %w", err)

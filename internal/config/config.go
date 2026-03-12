@@ -11,22 +11,23 @@ type FileMapping struct {
 	To   string
 }
 
-// ProxyConfig defines an HTTP reverse proxy with credential injection.
+// ProxyConfig defines an HTTP reverse proxy with optional credential injection.
 type ProxyConfig struct {
+	Name       string `json:"name"`         // proxy name (must be unique per instance)
 	Target     string `json:"target"`       // upstream URL (e.g., https://api.anthropic.com)
-	Auth       string `json:"auth"`         // "gcp" or "api-key"
+	Auth       string `json:"auth"`         // "gcp", "api-key", or "" (no auth)
 	APIKeyFile string `json:"api_key_file"` // local path to API key file (for api-key auth)
 	Port       int    `json:"port"`         // remote tunnel port (default 18080)
 }
 
 // Outputs holds the parsed values from `tofu output -json`.
 type Outputs struct {
-	PublicIP     string
-	InstanceID   string
-	SSHUser      string
+	PublicIP   string
+	InstanceID string
+	SSHUser    string
 	InitScript string        // optional
 	CopyFiles  []FileMapping // optional
-	Proxy      *ProxyConfig  // optional
+	Proxies    []ProxyConfig // optional
 }
 
 // tofuOutput is the structure of a single output value from `tofu output -json`.
@@ -54,10 +55,10 @@ func ParseOutputs(data []byte) (*Outputs, error) {
 	}
 
 	o := &Outputs{
-		PublicIP:   getString("public_ip"),
-		InstanceID: getString("instance_id"),
-		SSHUser:    getString("ssh_user"),
-		InitScript: getString("init_script"),
+		PublicIP:    getString("public_ip"),
+		InstanceID:  getString("instance_id"),
+		SSHUser:     getString("ssh_user"),
+		InitScript:  getString("init_script"),
 	}
 
 	// Parse optional copy_files list
@@ -81,24 +82,34 @@ func ParseOutputs(data []byte) (*Outputs, error) {
 		}
 	}
 
-	// Parse optional proxy config
-	if out, ok := raw["proxy"]; ok {
-		if m, ok := out.Value.(map[string]any); ok {
-			target, _ := m["target"].(string)
-			auth, _ := m["auth"].(string)
-			if target != "" && auth != "" {
-				proxy := &ProxyConfig{
+	// Parse optional proxies list
+	if out, ok := raw["proxies"]; ok {
+		if list, ok := out.Value.([]any); ok {
+			for _, item := range list {
+				m, ok := item.(map[string]any)
+				if !ok {
+					continue
+				}
+				name, _ := m["name"].(string)
+				target, _ := m["target"].(string)
+				if name == "" || target == "" {
+					continue
+				}
+				p := ProxyConfig{
+					Name:   name,
 					Target: target,
-					Auth:   auth,
 					Port:   18080, // default
 				}
+				if auth, ok := m["auth"].(string); ok {
+					p.Auth = auth
+				}
 				if apiKeyFile, ok := m["api_key_file"].(string); ok {
-					proxy.APIKeyFile = apiKeyFile
+					p.APIKeyFile = apiKeyFile
 				}
 				if port, ok := m["port"].(float64); ok {
-					proxy.Port = int(port)
+					p.Port = int(port)
 				}
-				o.Proxy = proxy
+				o.Proxies = append(o.Proxies, p)
 			}
 		}
 	}

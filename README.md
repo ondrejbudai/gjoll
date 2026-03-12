@@ -71,7 +71,7 @@ Environments are standard `.tf` files. gjoll injects two variables and reads out
 **Optional outputs:**
 - `init_script` — bash script run over SSH after boot
 - `copy_files` — list of `{from, to}` objects; copies local files/directories to the VM after init. If `to` is omitted, it defaults to the same path as `from`
-- `proxy` — HTTP reverse proxy configuration for credential-free API access (see [Proxy](#proxy) below)
+- `proxies` — list of HTTP reverse proxy configurations for credential-free API access (see [Proxy](#proxy) below)
 
 See `examples/` for complete environment files.
 
@@ -108,7 +108,7 @@ gjoll pull my-vm :my-branch              # auto-detect remote branch → my-bran
 
 ## Proxy
 
-The `gjoll proxy` command enables secure API access from sandboxed VMs **without copying credentials to the VM**. It runs a local HTTP reverse proxy that injects authentication headers (GCP Application Default Credentials or API keys) and creates an SSH reverse tunnel to the VM. This is ideal for tools like Claude Code running in sandboxes that need to call cloud APIs.
+The `gjoll proxy` command enables secure API access from sandboxed VMs **without copying credentials to the VM**. It starts one or more local HTTP reverse proxies that optionally inject authentication headers (GCP Application Default Credentials, API keys, or no auth) and creates SSH reverse tunnels to the VM. This is ideal for tools like Claude Code running in sandboxes that need to call cloud APIs.
 
 ### How it works
 
@@ -116,7 +116,7 @@ The `gjoll proxy` command enables secure API access from sandboxed VMs **without
 App on VM  →  http://localhost:18080
            →  SSH reverse tunnel (-R 18080:127.0.0.1:<local-port>)
            →  Local proxy on host (127.0.0.1:<local-port>)
-           →  Injects auth header (GCP Bearer token or API key)
+           →  Optionally injects auth header (GCP Bearer token or API key)
            →  https://<target>
 ```
 
@@ -124,32 +124,40 @@ All credentials stay on your local machine. The VM never sees any secrets.
 
 ### Configuration
 
-Add a `proxy` output to your `.tf` file:
+Add a `proxies` output to your `.tf` file:
 
 ```hcl
-# Example: Vertex AI for Claude Code
-output "proxy" {
-  value = {
-    target = "https://us-east5-aiplatform.googleapis.com/v1"
-    auth   = "gcp"          # "gcp" or "api-key"
-    port   = 18080          # optional, defaults to 18080
-  }
-}
-
-# Example: Direct Anthropic API
-output "proxy" {
-  value = {
-    target       = "https://api.anthropic.com"
-    auth         = "api-key"
-    api_key_file = "~/.anthropic/api_key"  # required for api-key auth
-    port         = 18080
-  }
+output "proxies" {
+  value = [
+    # Vertex AI with GCP auth
+    {
+      name   = "vertex"
+      target = "https://us-east5-aiplatform.googleapis.com/v1"
+      auth   = "gcp"          # "gcp", "api-key", or omit for no auth
+      port   = 18080          # optional, defaults to 18080
+    },
+    # Direct Anthropic API with API key
+    {
+      name         = "anthropic"
+      target       = "https://api.anthropic.com"
+      auth         = "api-key"
+      api_key_file = "~/.anthropic/api_key"
+      port         = 18081
+    },
+    # No-auth passthrough proxy
+    {
+      name   = "internal"
+      target = "https://internal.api.example.com"
+      port   = 18082
+    },
+  ]
 }
 ```
 
-Fields:
+Fields (per proxy):
+- `name` (required) — unique identifier for this proxy
 - `target` (required) — upstream URL to forward requests to
-- `auth` (required) — `"gcp"` or `"api-key"`
+- `auth` (optional) — `"gcp"`, `"api-key"`, or omit for no authentication
 - `api_key_file` (required for `api-key` auth) — local path to API key file (~ expanded)
 - `port` (optional, default 18080) — remote port on VM for the tunnel
 

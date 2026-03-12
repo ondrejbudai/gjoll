@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/obudai/gjoll/internal/paths"
@@ -17,12 +18,13 @@ import (
 
 var proxyCmd = &cobra.Command{
 	Use:   "proxy <name>",
-	Short: "Start credential-injecting proxy with SSH reverse tunnel",
-	Long: `Start an HTTP reverse proxy that injects authentication headers (GCP or API key)
-and creates an SSH reverse tunnel to the remote VM. This allows API clients on the
-VM to make authenticated requests without having credentials on the VM.
+	Short: "Start credential-injecting proxies with SSH reverse tunnels",
+	Long: `Start HTTP reverse proxies that optionally inject authentication headers
+(GCP, API key, or none) and create SSH reverse tunnels to the remote VM.
+This allows API clients on the VM to make authenticated requests without
+having credentials on the VM.
 
-The proxy configuration comes from the 'proxy' output in the terraform file.`,
+The proxy configuration comes from the 'proxies' output in the terraform file.`,
 	Args: cobra.ExactArgs(1),
 	RunE: runProxy,
 }
@@ -36,52 +38,9 @@ func runProxy(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("loading instance: %w", err)
 	}
 
-	// Check if proxy is configured
-	if inst.Proxy == nil {
-		return fmt.Errorf("no proxy configured for instance %q", name)
+	if len(inst.Proxies) == 0 {
+		return fmt.Errorf("no proxies configured for instance %q", name)
 	}
-
-	cfg := inst.Proxy
-
-	// Validate auth mode
-	if cfg.Auth != "gcp" && cfg.Auth != "api-key" {
-		return fmt.Errorf("invalid auth mode %q (must be 'gcp' or 'api-key')", cfg.Auth)
-	}
-
-	// Read API key if needed
-	var apiKey string
-	if cfg.Auth == "api-key" {
-		if cfg.APIKeyFile == "" {
-			return fmt.Errorf("api_key_file not set for api-key auth")
-		}
-
-		apiKeyPath, err := remote.ExpandTilde(cfg.APIKeyFile)
-		if err != nil {
-			return fmt.Errorf("expanding api_key_file path: %w", err)
-		}
-
-		apiKeyBytes, err := os.ReadFile(apiKeyPath)
-		if err != nil {
-			return fmt.Errorf("reading api key from %s: %w", cfg.APIKeyFile, err)
-		}
-		apiKey = string(apiKeyBytes)
-	}
-
-	// Create and start proxy
-	fmt.Printf("Starting proxy to %s (auth: %s)...\n", cfg.Target, cfg.Auth)
-	p, err := proxy.New(cfg.Target, cfg.Auth, apiKey)
-	if err != nil {
-		return fmt.Errorf("creating proxy: %w", err)
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	localPort, err := p.Start(ctx)
-	if err != nil {
-		return fmt.Errorf("starting proxy: %w", err)
-	}
-	fmt.Printf("Proxy listening on localhost:%d\n", localPort)
 
 	// Get SSH config path
 	instanceDir, err := paths.InstanceDir(name)
@@ -90,28 +49,106 @@ func runProxy(cmd *cobra.Command, args []string) error {
 	}
 	sshConfigPath := remote.SSHConfigPath(instanceDir)
 
-	// Start SSH reverse tunnel
-	remotePort := cfg.Port
-	fmt.Printf("Starting SSH reverse tunnel to %s:%d...\n", name, remotePort)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	sshArgs := []string{
-		"-F", sshConfigPath,
-		"-R", fmt.Sprintf("%d:127.0.0.1:%d", remotePort, localPort),
-		"-N", // no remote command
-		name,
+	type runningProxy struct {
+		proxy   *proxy.Proxy
+		sshProc *exec.Cmd
+	}
+	var running []runningProxy
+
+	cleanup := func() {
+		for _, rp := range running {
+			if rp.sshProc != nil && rp.sshProc.Process != nil {
+				if err := rp.sshProc.Process.Kill(); err != nil {
+					fmt.Fprintf(os.Stderr, "warning: killing SSH process: %v\n", err)
+				}
+				_ = rp.sshProc.Wait()
+			}
+			if err := rp.proxy.Stop(ctx); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: stopping proxy: %v\n", err)
+			}
+		}
 	}
 
-	sshCmd := exec.Command("ssh", sshArgs...)
-	sshCmd.Stdout = os.Stdout
-	sshCmd.Stderr = os.Stderr
+	// Build reverse tunnel args: collect all -R flags for a single SSH connection
+	var tunnelArgs []string
 
-	if err := sshCmd.Start(); err != nil {
-		_ = p.Stop(ctx)
+	for _, cfg := range inst.Proxies {
+		// Validate auth mode
+		if cfg.Auth != "" && cfg.Auth != "gcp" && cfg.Auth != "api-key" {
+			cleanup()
+			return fmt.Errorf("proxy %q: invalid auth mode %q (must be 'gcp', 'api-key', or empty)", cfg.Name, cfg.Auth)
+		}
+
+		// Read API key if needed
+		var apiKey string
+		if cfg.Auth == "api-key" {
+			if cfg.APIKeyFile == "" {
+				cleanup()
+				return fmt.Errorf("proxy %q: api_key_file not set for api-key auth", cfg.Name)
+			}
+
+			apiKeyPath, err := remote.ExpandTilde(cfg.APIKeyFile)
+			if err != nil {
+				cleanup()
+				return fmt.Errorf("proxy %q: expanding api_key_file path: %w", cfg.Name, err)
+			}
+
+			apiKeyBytes, err := os.ReadFile(apiKeyPath)
+			if err != nil {
+				cleanup()
+				return fmt.Errorf("proxy %q: reading api key from %s: %w", cfg.Name, cfg.APIKeyFile, err)
+			}
+			apiKey = strings.TrimSpace(string(apiKeyBytes))
+		}
+
+		authDesc := cfg.Auth
+		if authDesc == "" {
+			authDesc = "none"
+		}
+		fmt.Printf("Starting proxy %q to %s (auth: %s)...\n", cfg.Name, cfg.Target, authDesc)
+
+		p, err := proxy.New(cfg.Target, cfg.Auth, apiKey)
+		if err != nil {
+			cleanup()
+			return fmt.Errorf("proxy %q: creating proxy: %w", cfg.Name, err)
+		}
+
+		localPort, err := p.Start(ctx)
+		if err != nil {
+			cleanup()
+			return fmt.Errorf("proxy %q: starting proxy: %w", cfg.Name, err)
+		}
+
+		running = append(running, runningProxy{proxy: p})
+		tunnelArgs = append(tunnelArgs, "-R", fmt.Sprintf("%d:127.0.0.1:%d", cfg.Port, localPort))
+		fmt.Printf("  %s listening on localhost:%d → remote port %d\n", cfg.Name, localPort, cfg.Port)
+	}
+
+	// Start a single SSH connection with all reverse tunnels
+	fmt.Printf("Starting SSH reverse tunnel to %s...\n", name)
+	sshArgs := []string{"-F", sshConfigPath}
+	sshArgs = append(sshArgs, tunnelArgs...)
+	sshArgs = append(sshArgs, "-N", name) // no remote command
+
+	sshProc := exec.Command("ssh", sshArgs...)
+	sshProc.Stdout = os.Stdout
+	sshProc.Stderr = os.Stderr
+
+	if err := sshProc.Start(); err != nil {
+		cleanup()
 		return fmt.Errorf("starting SSH tunnel: %w", err)
 	}
 
-	fmt.Printf("\n✓ Proxy running!\n")
-	fmt.Printf("  Remote endpoint: http://localhost:%d on %s\n", remotePort, name)
+	// Track the SSH process for cleanup
+	running = append(running, runningProxy{proxy: nil, sshProc: sshProc})
+
+	fmt.Printf("\nProxies running!\n")
+	for _, cfg := range inst.Proxies {
+		fmt.Printf("  %s → http://localhost:%d on %s\n", cfg.Name, cfg.Port, name)
+	}
 	fmt.Printf("  Press Ctrl+C to stop\n\n")
 
 	// Wait for interrupt signal
@@ -120,18 +157,7 @@ func runProxy(cmd *cobra.Command, args []string) error {
 
 	<-sigCh
 	fmt.Println("\nShutting down...")
-
-	// Stop SSH tunnel
-	if err := sshCmd.Process.Kill(); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: killing SSH process: %v\n", err)
-	}
-	_ = sshCmd.Wait()
-
-	// Stop proxy
-	if err := p.Stop(ctx); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: stopping proxy: %v\n", err)
-	}
-
+	cleanup()
 	fmt.Println("Stopped.")
 	return nil
 }
