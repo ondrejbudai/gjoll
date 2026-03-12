@@ -106,7 +106,7 @@ output "init_script" {
     export ANTHROPIC_VERTEX_PROJECT_ID=yourprojecthere
     export ANTHROPIC_VERTEX_BASE_URL=http://localhost:18080
     export CLAUDE_CODE_SKIP_VERTEX_AUTH=1
-    export CLAUDE_MODEL=claude-opus-4-6
+    export ANTHROPIC_MODEL=claude-opus-4-6
     alias claude='claude --dangerously-skip-permissions'
     RCEOF
   EOT
