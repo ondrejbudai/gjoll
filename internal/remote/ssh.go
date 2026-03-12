@@ -45,6 +45,8 @@ func WriteConfig(configPath, name, ip, user, keyPath string) error {
     HostName %s
     User %s
     IdentityFile "%s"
+    IdentitiesOnly yes
+    IdentityAgent none
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null
     LogLevel ERROR
@@ -107,6 +109,8 @@ func WaitForSSH(ip, user, keyPath string, timeout time.Duration) error {
 			cmd := exec.CommandContext(ctx, "ssh",
 				"-o", "StrictHostKeyChecking=no",
 				"-o", "UserKnownHostsFile=/dev/null",
+				"-o", "IdentitiesOnly=yes",
+				"-o", "IdentityAgent=none",
 				"-o", "ConnectTimeout=5",
 				"-o", "BatchMode=yes",
 				"-o", "LogLevel=ERROR",
@@ -149,6 +153,8 @@ func RunScript(ip, user, keyPath, content string) error {
 	sshOpts := []string{
 		"-o", "StrictHostKeyChecking=no",
 		"-o", "UserKnownHostsFile=/dev/null",
+		"-o", "IdentitiesOnly=yes",
+		"-o", "IdentityAgent=none",
 		"-o", "LogLevel=ERROR",
 		"-i", keyPath,
 	}
@@ -209,6 +215,8 @@ func CopyFile(ip, user, keyPath, localPath, remotePath string) error {
 	sshOpts := []string{
 		"-o", "StrictHostKeyChecking=no",
 		"-o", "UserKnownHostsFile=/dev/null",
+		"-o", "IdentitiesOnly=yes",
+		"-o", "IdentityAgent=none",
 		"-o", "LogLevel=ERROR",
 		"-i", keyPath,
 	}

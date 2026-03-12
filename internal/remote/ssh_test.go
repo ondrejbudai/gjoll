@@ -28,6 +28,8 @@ func TestWriteConfig(t *testing.T) {
 		"HostName 1.2.3.4",
 		"User fedora",
 		`IdentityFile "/path/to/key"`,
+		"IdentitiesOnly yes",
+		"IdentityAgent none",
 		"StrictHostKeyChecking no",
 		"UserKnownHostsFile /dev/null",
 	}
