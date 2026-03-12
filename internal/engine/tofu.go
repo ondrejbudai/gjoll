@@ -229,6 +229,13 @@ func Start(name string) error {
 		return fmt.Errorf("tofu apply: %w", err)
 	}
 
+	// Refresh state to pick up new IP. Some providers (e.g. AWS) use a
+	// separate resource for instance state, so the main instance resource
+	// isn't refreshed during apply and its public_ip stays stale.
+	if err := runTofu(tfDir, "apply", "-refresh-only", "-auto-approve"); err != nil {
+		return fmt.Errorf("tofu refresh: %w", err)
+	}
+
 	// Re-read outputs to get new IP
 	outputs, err := readOutputs(tfDir)
 	if err != nil {
