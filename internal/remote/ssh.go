@@ -1,6 +1,7 @@
 package remote
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -99,17 +100,23 @@ func WaitForSSH(ip, user, keyPath string, timeout time.Duration) error {
 		conn, err := net.DialTimeout("tcp", net.JoinHostPort(ip, "22"), 5*time.Second)
 		if err == nil {
 			_ = conn.Close()
-			// TCP is open, try actual SSH
-			cmd := exec.Command("ssh",
+			// TCP is open, try actual SSH with a hard timeout.
+			// BatchMode prevents hanging on password prompts when key
+			// auth fails (e.g. cloud-init hasn't injected the key yet).
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			cmd := exec.CommandContext(ctx, "ssh",
 				"-o", "StrictHostKeyChecking=no",
 				"-o", "UserKnownHostsFile=/dev/null",
 				"-o", "ConnectTimeout=5",
+				"-o", "BatchMode=yes",
 				"-o", "LogLevel=ERROR",
 				"-i", keyPath,
 				fmt.Sprintf("%s@%s", user, ip),
 				"true",
 			)
-			if cmd.Run() == nil {
+			err := cmd.Run()
+			cancel()
+			if err == nil {
 				return nil
 			}
 		}
