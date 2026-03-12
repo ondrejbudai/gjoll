@@ -50,7 +50,8 @@ resource "libvirt_domain" "sandbox" {
   vcpu        = 2
   running     = true
 
-  os = { type = "hvm" }
+  cpu = { mode = "host-passthrough" }
+  os  = { type = "hvm" }
 
   devices = {
     disks = [

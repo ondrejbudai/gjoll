@@ -130,7 +130,7 @@ Add a `proxy` output to your `.tf` file:
 # Example: Vertex AI for Claude Code
 output "proxy" {
   value = {
-    target = "https://us-east5-aiplatform.googleapis.com"
+    target = "https://us-east5-aiplatform.googleapis.com/v1"
     auth   = "gcp"          # "gcp" or "api-key"
     port   = 18080          # optional, defaults to 18080
   }
