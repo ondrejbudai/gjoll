@@ -75,17 +75,17 @@ func TestExpandTilde(t *testing.T) {
 	}
 }
 
-func TestCopySecretMissingFile(t *testing.T) {
-	err := CopySecret("1.2.3.4", "user", "/fake/key", "/nonexistent/file", "/remote/dest")
+func TestCopyFileMissingFile(t *testing.T) {
+	err := CopyFile("1.2.3.4", "user", "/fake/key", "/nonexistent/file", "/remote/dest")
 	if err == nil {
-		t.Fatal("CopySecret() expected error for non-existent local file")
+		t.Fatal("CopyFile() expected error for non-existent local file")
 	}
 	if !strings.Contains(err.Error(), "local file") {
 		t.Errorf("error = %q, want it to mention 'local file'", err.Error())
 	}
 }
 
-func TestCopySecret(t *testing.T) {
+func TestCopyFile(t *testing.T) {
 	home, _ := os.UserHomeDir()
 
 	tests := []struct {
@@ -151,9 +151,9 @@ func TestCopySecret(t *testing.T) {
 			}
 			t.Cleanup(func() { execCommand = original })
 
-			err := CopySecret(tt.ip, "fedora", "/fake/key", localFile, tt.remotePath)
+			err := CopyFile(tt.ip, "fedora", "/fake/key", localFile, tt.remotePath)
 			if err != nil {
-				t.Fatalf("CopySecret() unexpected error: %v", err)
+				t.Fatalf("CopyFile() unexpected error: %v", err)
 			}
 
 			if len(commands) != 2 {

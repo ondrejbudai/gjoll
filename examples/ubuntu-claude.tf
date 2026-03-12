@@ -76,8 +76,8 @@ output "init_script" {
   EOT
 }
 
-# Uncomment to copy secrets from your local machine to the VM after init:
-# output "clone_secrets" {
+# Uncomment to copy files from your local machine to the VM after init:
+# output "copy_files" {
 #   value = [
 #     { from = "~/.ssh/id_ed25519.pub" },
 #     { from = "~/.anthropic/api_key", to = "/home/ubuntu/.config/anthropic/api_key" },

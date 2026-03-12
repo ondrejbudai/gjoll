@@ -148,13 +148,13 @@ func Provision(name, envPath string) error {
 		}
 	}
 
-	// Copy secrets if defined
-	if len(outputs.CloneSecrets) > 0 {
-		fmt.Println("Copying secrets...")
-		for _, s := range outputs.CloneSecrets {
-			fmt.Printf("  %s → %s\n", s.From, s.To)
-			if err := remote.CopySecret(outputs.PublicIP, outputs.SSHUser, keyPath, s.From, s.To); err != nil {
-				return fmt.Errorf("clone secret %s: %w", s.From, err)
+	// Copy files if defined
+	if len(outputs.CopyFiles) > 0 {
+		fmt.Println("Copying files...")
+		for _, f := range outputs.CopyFiles {
+			fmt.Printf("  %s → %s\n", f.From, f.To)
+			if err := remote.CopyFile(outputs.PublicIP, outputs.SSHUser, keyPath, f.From, f.To); err != nil {
+				return fmt.Errorf("copy file %s: %w", f.From, err)
 			}
 		}
 	}
