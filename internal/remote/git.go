@@ -53,10 +53,24 @@ func GitPush(configPath, name, remotePath string) error {
 	sshCmd := fmt.Sprintf("ssh -F '%s'", configPath)
 	remoteName := "gjoll-" + name
 
-	// Initialize repo on VM (idempotent)
-	initCmd := exec.Command("ssh", "-F", configPath, name,
-		fmt.Sprintf("mkdir -p %s && cd %s && git init && git config receive.denyCurrentBranch updateInstead",
-			remotePath, remotePath))
+	// Determine which branch we are pushing.
+	branchCmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	branchOutput, err := branchCmd.Output()
+	if err != nil {
+		return fmt.Errorf("determining current branch: %w", err)
+	}
+	branch := strings.TrimSpace(string(branchOutput))
+
+	// Initialize repo on VM (idempotent).
+	// Set HEAD to the branch we are about to push so that
+	// receive.denyCurrentBranch=updateInstead updates the working tree.
+	initScript := fmt.Sprintf(
+		"mkdir -p %s && cd %s && git init && git config receive.denyCurrentBranch updateInstead",
+		remotePath, remotePath)
+	if branch != "HEAD" {
+		initScript += fmt.Sprintf(" && git symbolic-ref HEAD refs/heads/%s", branch)
+	}
+	initCmd := exec.Command("ssh", "-F", configPath, name, initScript)
 	initCmd.Stdout = os.Stdout
 	initCmd.Stderr = os.Stderr
 	if err := initCmd.Run(); err != nil {
@@ -75,19 +89,6 @@ func GitPush(configPath, name, remotePath string) error {
 	pushCmd.Stderr = os.Stderr
 	if err := pushCmd.Run(); err != nil {
 		return fmt.Errorf("git push: %w", err)
-	}
-
-	// Set remote HEAD to match the pushed branch so pull can resolve it
-	branchCmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
-	if branchOutput, err := branchCmd.Output(); err == nil {
-		branch := strings.TrimSpace(string(branchOutput))
-		if branch != "HEAD" {
-			headCmd := exec.Command("ssh", "-F", configPath, name,
-				fmt.Sprintf("cd %s && git symbolic-ref HEAD refs/heads/%s", remotePath, branch))
-			if err := headCmd.Run(); err != nil {
-				fmt.Fprintf(os.Stderr, "warning: setting remote HEAD to %s: %v\n", branch, err)
-			}
-		}
 	}
 
 	return nil
