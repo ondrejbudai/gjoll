@@ -48,7 +48,7 @@ resource "libvirt_domain" "sandbox" {
   memory      = 4096
   memory_unit = "MiB"
   vcpu        = 2
-  running     = true
+  running     = var.gjoll_instance_state == "running"
 
   cpu = { mode = "host-passthrough" }
   os  = { type = "hvm" }
@@ -73,7 +73,7 @@ resource "libvirt_domain" "sandbox" {
       {
         source      = { network = { network = "default" } }
         model       = { type = "virtio" }
-        wait_for_ip = { source = "lease" }
+        wait_for_ip = var.gjoll_instance_state == "running" ? { source = "lease" } : null
       },
     ]
     consoles = [
@@ -83,12 +83,13 @@ resource "libvirt_domain" "sandbox" {
 }
 
 data "libvirt_domain_interface_addresses" "sandbox" {
+  count  = var.gjoll_instance_state == "running" ? 1 : 0
   domain = libvirt_domain.sandbox.name
   source = "lease"
 }
 
 output "public_ip" {
-  value = data.libvirt_domain_interface_addresses.sandbox.interfaces[0].addrs[0].addr
+  value = var.gjoll_instance_state == "running" ? data.libvirt_domain_interface_addresses.sandbox[0].interfaces[0].addrs[0].addr : ""
 }
 output "instance_id" { value = tostring(libvirt_domain.sandbox.id) }
 output "ssh_user"    { value = "fedora" }

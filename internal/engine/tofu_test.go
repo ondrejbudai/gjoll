@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -94,5 +95,69 @@ func TestCopyTFFilesEmptyDir(t *testing.T) {
 	err := copyTFFiles(srcDir, destDir)
 	if err == nil {
 		t.Fatal("expected error for empty directory")
+	}
+}
+
+func TestWriteTFVars(t *testing.T) {
+	dir := t.TempDir()
+
+	if err := writeTFVars(dir, "ssh-ed25519 AAAA...", "mybox", "running"); err != nil {
+		t.Fatalf("writeTFVars() error: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, "terraform.tfvars.json"))
+	if err != nil {
+		t.Fatalf("reading tfvars: %v", err)
+	}
+
+	var tfvars map[string]string
+	if err := json.Unmarshal(data, &tfvars); err != nil {
+		t.Fatalf("parsing tfvars: %v", err)
+	}
+
+	checks := map[string]string{
+		"gjoll_ssh_pubkey":     "ssh-ed25519 AAAA...",
+		"gjoll_name":           "mybox",
+		"gjoll_instance_state": "running",
+	}
+	for k, want := range checks {
+		if tfvars[k] != want {
+			t.Errorf("tfvars[%q] = %q, want %q", k, tfvars[k], want)
+		}
+	}
+}
+
+func TestUpdateTFVarsState(t *testing.T) {
+	dir := t.TempDir()
+
+	// Write initial tfvars
+	if err := writeTFVars(dir, "ssh-ed25519 AAAA...", "mybox", "running"); err != nil {
+		t.Fatalf("writeTFVars() error: %v", err)
+	}
+
+	// Update state to stopped
+	if err := updateTFVarsState(dir, "stopped"); err != nil {
+		t.Fatalf("updateTFVarsState() error: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, "terraform.tfvars.json"))
+	if err != nil {
+		t.Fatalf("reading tfvars: %v", err)
+	}
+
+	var tfvars map[string]string
+	if err := json.Unmarshal(data, &tfvars); err != nil {
+		t.Fatalf("parsing tfvars: %v", err)
+	}
+
+	if tfvars["gjoll_instance_state"] != "stopped" {
+		t.Errorf("gjoll_instance_state = %q, want %q", tfvars["gjoll_instance_state"], "stopped")
+	}
+	// Other vars should be preserved
+	if tfvars["gjoll_ssh_pubkey"] != "ssh-ed25519 AAAA..." {
+		t.Errorf("gjoll_ssh_pubkey = %q, want preserved", tfvars["gjoll_ssh_pubkey"])
+	}
+	if tfvars["gjoll_name"] != "mybox" {
+		t.Errorf("gjoll_name = %q, want preserved", tfvars["gjoll_name"])
 	}
 }

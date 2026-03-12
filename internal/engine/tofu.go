@@ -25,6 +25,12 @@ variable "gjoll_name" {
   type        = string
   description = "Sandbox name injected by gjoll"
 }
+
+variable "gjoll_instance_state" {
+  type        = string
+  description = "Desired instance state: running or stopped"
+  default     = "running"
+}
 `
 
 // DeriveName extracts a default sandbox name from an env path.
@@ -79,16 +85,8 @@ func Provision(name, envPath string) error {
 	}
 
 	// Write tfvars
-	tfvars := map[string]string{
-		"gjoll_ssh_pubkey": strings.TrimSpace(pubKey),
-		"gjoll_name":       name,
-	}
-	tfvarsJSON, err := json.MarshalIndent(tfvars, "", "  ")
-	if err != nil {
+	if err := writeTFVars(tfDir, strings.TrimSpace(pubKey), name, "running"); err != nil {
 		return err
-	}
-	if err := os.WriteFile(filepath.Join(tfDir, "terraform.tfvars.json"), tfvarsJSON, 0644); err != nil {
-		return fmt.Errorf("writing tfvars: %w", err)
 	}
 
 	// tofu init
@@ -167,6 +165,99 @@ func Provision(name, envPath string) error {
 	return nil
 }
 
+// Stop stops a running sandbox by setting gjoll_instance_state to "stopped".
+func Stop(name string) error {
+	tfDir, err := paths.TerraformDir(name)
+	if err != nil {
+		return err
+	}
+
+	inst, err := state.Load(name)
+	if err != nil {
+		return err
+	}
+
+	if inst.Status == "stopped" {
+		return fmt.Errorf("sandbox %q is already stopped", name)
+	}
+
+	if err := updateTFVarsState(tfDir, "stopped"); err != nil {
+		return err
+	}
+
+	fmt.Println("Stopping instance...")
+	if err := runTofu(tfDir, "apply", "-auto-approve"); err != nil {
+		return fmt.Errorf("tofu apply: %w", err)
+	}
+
+	inst.Status = "stopped"
+	if err := state.Save(inst); err != nil {
+		return fmt.Errorf("saving state: %w", err)
+	}
+
+	fmt.Printf("Sandbox %q stopped.\n", name)
+	return nil
+}
+
+// Start starts a stopped sandbox by setting gjoll_instance_state to "running".
+// The IP address may change after start, so the SSH config is rewritten.
+func Start(name string) error {
+	instanceDir, err := paths.InstanceDir(name)
+	if err != nil {
+		return err
+	}
+	tfDir, err := paths.TerraformDir(name)
+	if err != nil {
+		return err
+	}
+
+	inst, err := state.Load(name)
+	if err != nil {
+		return err
+	}
+
+	if inst.Status == "running" {
+		return fmt.Errorf("sandbox %q is already running", name)
+	}
+
+	if err := updateTFVarsState(tfDir, "running"); err != nil {
+		return err
+	}
+
+	fmt.Println("Starting instance...")
+	if err := applyWithRetry(tfDir); err != nil {
+		return fmt.Errorf("tofu apply: %w", err)
+	}
+
+	// Re-read outputs to get new IP
+	outputs, err := readOutputs(tfDir)
+	if err != nil {
+		return fmt.Errorf("reading outputs: %w", err)
+	}
+
+	inst.PublicIP = outputs.PublicIP
+	inst.Status = "running"
+	if err := state.Save(inst); err != nil {
+		return fmt.Errorf("saving state: %w", err)
+	}
+
+	// Rewrite SSH config with new IP
+	keyPath := filepath.Join(instanceDir, "id_ed25519")
+	sshConfig := remote.SSHConfigPath(instanceDir)
+	if err := remote.WriteConfig(sshConfig, name, outputs.PublicIP, outputs.SSHUser, keyPath); err != nil {
+		return fmt.Errorf("writing SSH config: %w", err)
+	}
+
+	fmt.Println("Waiting for SSH...")
+	if err := remote.WaitForSSH(outputs.PublicIP, outputs.SSHUser, keyPath, 5*time.Minute); err != nil {
+		fmt.Printf("Warning: SSH not yet reachable: %v\n", err)
+	}
+
+	fmt.Printf("Sandbox %q started.\n", name)
+	fmt.Printf("  IP:   %s\n", outputs.PublicIP)
+	return nil
+}
+
 // Destroy tears down a sandbox and removes all local state.
 func Destroy(name string) error {
 	tfDir, err := paths.TerraformDir(name)
@@ -184,6 +275,65 @@ func Destroy(name string) error {
 	}
 
 	fmt.Printf("Sandbox %q destroyed.\n", name)
+	return nil
+}
+
+// writeTFVars writes the terraform.tfvars.json file with all gjoll variables.
+func writeTFVars(tfDir, pubKey, name, instanceState string) error {
+	tfvars := map[string]string{
+		"gjoll_ssh_pubkey":     pubKey,
+		"gjoll_name":           name,
+		"gjoll_instance_state": instanceState,
+	}
+	tfvarsJSON, err := json.MarshalIndent(tfvars, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(tfDir, "terraform.tfvars.json"), tfvarsJSON, 0644); err != nil {
+		return fmt.Errorf("writing tfvars: %w", err)
+	}
+	return nil
+}
+
+// updateTFVarsState reads the existing tfvars file and updates only the
+// gjoll_instance_state field.
+func updateTFVarsState(tfDir, instanceState string) error {
+	tfvarsPath := filepath.Join(tfDir, "terraform.tfvars.json")
+	data, err := os.ReadFile(tfvarsPath)
+	if err != nil {
+		return fmt.Errorf("reading tfvars: %w", err)
+	}
+
+	var tfvars map[string]string
+	if err := json.Unmarshal(data, &tfvars); err != nil {
+		return fmt.Errorf("parsing tfvars: %w", err)
+	}
+
+	tfvars["gjoll_instance_state"] = instanceState
+
+	out, err := json.MarshalIndent(tfvars, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(tfvarsPath, out, 0644); err != nil {
+		return fmt.Errorf("writing tfvars: %w", err)
+	}
+	return nil
+}
+
+// applyWithRetry runs tofu apply, and on failure refreshes state and retries
+// once. Some providers (e.g. libvirt) produce inconsistent resource IDs when
+// instances restart; a refresh resolves the stale state.
+func applyWithRetry(tfDir string) error {
+	if err := runTofu(tfDir, "apply", "-auto-approve"); err != nil {
+		fmt.Println("Apply failed, refreshing state and retrying...")
+		if rerr := runTofu(tfDir, "apply", "-refresh-only", "-auto-approve"); rerr != nil {
+			return fmt.Errorf("refresh failed: %w (original error: %v)", rerr, err)
+		}
+		if rerr := runTofu(tfDir, "apply", "-auto-approve"); rerr != nil {
+			return rerr
+		}
+	}
 	return nil
 }
 
