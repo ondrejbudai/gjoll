@@ -46,22 +46,27 @@ gjoll down fedora-dev
 | Command | Description |
 |---|---|
 | `gjoll up <env> [-n name]` | Create and launch a VM |
+| `gjoll create <env> [-n name]` | Create a VM, run init, then stop it |
 | `gjoll down <name>` | Destroy VM and all resources |
+| `gjoll start <name>` | Start a stopped sandbox |
+| `gjoll stop <name>` | Stop a running sandbox |
 | `gjoll list` | List all sandboxes |
 | `gjoll status <name>` | Show sandbox details |
 | `gjoll ssh <name> [command...]` | SSH into sandbox (or run a command) |
+| `gjoll ssh --wakeup <name> -- <cmd>` | Start, run command, stop |
 | `gjoll push <name> [--path]` | Git push current repo to VM |
 | `gjoll pull <name> [refspec] [--path]` | Git fetch from VM, create local branch |
 | `gjoll cp <name> <src> <dest>` | Copy files (prefix remote paths with `:`) |
-| `gjoll proxy <name>` | Start credential-injecting proxy with SSH reverse tunnel |
+| `gjoll proxy <name>` | Start credential-injecting proxies with SSH reverse tunnels |
 
 ## Environment Files
 
-Environments are standard `.tf` files. gjoll injects two variables and reads outputs:
+Environments are standard `.tf` files. gjoll injects three variables and reads outputs:
 
 **Injected variables** (available in your `.tf`):
 - `var.gjoll_ssh_pubkey` — public key for SSH access
 - `var.gjoll_name` — sandbox name
+- `var.gjoll_instance_state` — desired state: `"running"` or `"stopped"` (default `"running"`)
 
 **Required outputs:**
 - `public_ip` — VM's SSH-reachable IP
@@ -78,12 +83,14 @@ See `examples/` for complete environment files.
 ## How It Works
 
 1. `gjoll up` copies your `.tf` file to a workspace directory
-2. Generates an SSH keypair and injects `gjoll_ssh_pubkey` + `gjoll_name` as OpenTofu variables
+2. Generates an SSH keypair and injects `gjoll_ssh_pubkey`, `gjoll_name`, and `gjoll_instance_state` as OpenTofu variables
 3. Runs `tofu init` and `tofu apply`
 4. Reads outputs (`public_ip`, `instance_id`, `ssh_user`)
 5. If `init_script` output exists, waits for SSH and runs it on the VM
 6. If `copy_files` output exists, copies each file from the local machine to the VM
 7. Saves instance metadata for other commands
+
+`gjoll start` and `gjoll stop` change `gjoll_instance_state` and re-run `tofu apply`. Your `.tf` file should use this variable to control the instance state (e.g., `running = var.gjoll_instance_state == "running"` for libvirt). The IP address may change after a restart — gjoll updates the SSH config automatically.
 
 ## Git Sync
 

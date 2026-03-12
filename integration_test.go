@@ -170,6 +170,32 @@ func TestIntegration(t *testing.T) {
 		}
 	})
 
+	t.Run("stop-start", func(t *testing.T) {
+		// Stop the sandbox
+		out := gjoll(t, "stop", sandboxName)
+		if !strings.Contains(out, "stopped") {
+			t.Errorf("stop output missing 'stopped':\n%s", out)
+		}
+
+		// Verify status shows stopped
+		out = gjoll(t, "status", sandboxName)
+		if !strings.Contains(out, "stopped") {
+			t.Errorf("status after stop should show 'stopped':\n%s", out)
+		}
+
+		// Start the sandbox
+		out = gjoll(t, "start", sandboxName)
+		if !strings.Contains(out, "started") {
+			t.Errorf("start output missing 'started':\n%s", out)
+		}
+
+		// Verify SSH works after restart
+		out = gjoll(t, "ssh", sandboxName, "uname", "-a")
+		if !strings.Contains(out, "Linux") {
+			t.Errorf("ssh after restart does not contain Linux:\n%s", out)
+		}
+	})
+
 	t.Run("down", func(t *testing.T) {
 		gjoll(t, "down", sandboxName)
 		tornDown = true
