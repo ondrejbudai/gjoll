@@ -56,6 +56,11 @@ resource "aws_instance" "sandbox" {
   }
 }
 
-output "public_ip"   { value = aws_instance.sandbox.public_ip }
+resource "aws_ec2_instance_state" "sandbox" {
+  instance_id = aws_instance.sandbox.id
+  state       = var.gjoll_instance_state
+}
+
+output "public_ip"   { value = var.gjoll_instance_state == "running" ? aws_instance.sandbox.public_ip : "" }
 output "instance_id" { value = aws_instance.sandbox.id }
 output "ssh_user"    { value = "admin" }
