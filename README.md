@@ -54,6 +54,7 @@ gjoll down fedora-dev
 | `gjoll status <name>` | Show sandbox details |
 | `gjoll ssh <name> [command...]` | SSH into sandbox (or run a command) |
 | `gjoll ssh --wakeup <name> -- <cmd>` | Start, run command, stop |
+| `gjoll ssh --proxy <name>` | SSH with proxies tunneled through the connection |
 | `gjoll push <name> [--path]` | Git push current repo to VM |
 | `gjoll pull <name> [refspec] [--path]` | Git fetch from VM, create local branch |
 | `gjoll cp <name> <src> <dest>` | Copy files (prefix remote paths with `:`) |

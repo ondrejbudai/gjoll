@@ -1,7 +1,10 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"os"
+	"os/exec"
 
 	"github.com/obudai/gjoll/internal/engine"
 	"github.com/obudai/gjoll/internal/paths"
@@ -10,7 +13,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var sshWakeup bool
+var (
+	sshWakeup    bool
+	sshProxyFlag bool
+)
 
 var sshCmd = &cobra.Command{
 	Use:   "ssh <name> [-- command...]",
@@ -23,10 +29,16 @@ starting an interactive shell.
 With --wakeup, a stopped sandbox is started before connecting and stopped
 again after the command finishes (requires a command).
 
+With --proxy, credential-injecting proxies are started and reverse-tunneled
+through the SSH connection. The proxies are stopped when SSH exits.
+
 Examples:
-  gjoll ssh mybox              Interactive shell
-  gjoll ssh mybox -- uname -a  Run a command
-  gjoll ssh mybox --wakeup -- uname -a  Start, run, stop`,
+  gjoll ssh mybox                          Interactive shell
+  gjoll ssh mybox -- uname -a              Run a command
+  gjoll ssh mybox --wakeup -- uname -a     Start, run, stop
+  gjoll ssh mybox --proxy                  Shell with proxies
+  gjoll ssh mybox --proxy -- claude        Run command with proxies
+  gjoll ssh mybox --wakeup --proxy -- cmd  Wakeup + proxies`,
 	Args:               cobra.MinimumNArgs(1),
 	DisableFlagParsing: false,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -69,7 +81,6 @@ Examples:
 				}()
 			}
 		} else {
-			// Verify instance exists
 			if _, err := state.Load(name); err != nil {
 				return err
 			}
@@ -79,13 +90,63 @@ Examples:
 		if err != nil {
 			return err
 		}
-
 		configPath := remote.SSHConfigPath(instanceDir)
+
+		if sshProxyFlag {
+			return sshWithProxy(name, configPath, args[1:]...)
+		}
+
 		return remote.Connect(configPath, name, args[1:]...)
 	},
+}
+
+// sshWithProxy starts proxies, opens SSH with reverse tunnels, and cleans up.
+// Unlike remote.Connect, this always runs SSH as a subprocess so proxies can
+// be stopped when the session ends.
+func sshWithProxy(name, configPath string, command ...string) error {
+	inst, err := state.Load(name)
+	if err != nil {
+		return err
+	}
+
+	if len(inst.Proxies) == 0 {
+		return fmt.Errorf("no proxies configured for instance %q — cannot use --proxy", name)
+	}
+
+	ctx := context.Background()
+	ps, err := startProxies(ctx, inst.Proxies)
+	if err != nil {
+		return err
+	}
+	defer ps.stop(ctx)
+
+	// Build SSH args: config, reverse tunnels, host, then command
+	sshPath, err := exec.LookPath("ssh")
+	if err != nil {
+		return fmt.Errorf("ssh not found: %w", err)
+	}
+
+	sshArgs := []string{"-F", configPath}
+	sshArgs = append(sshArgs, ps.tunnelArgs...)
+	sshArgs = append(sshArgs, name)
+	sshArgs = append(sshArgs, command...)
+
+	sshProc := exec.Command(sshPath, sshArgs...)
+	sshProc.Stdin = os.Stdin
+	sshProc.Stdout = os.Stdout
+	sshProc.Stderr = os.Stderr
+
+	fmt.Printf("Proxies active on %s:\n", name)
+	for _, cfg := range inst.Proxies {
+		fmt.Printf("  %s → http://localhost:%d\n", cfg.Name, cfg.Port)
+	}
+	fmt.Println()
+
+	return sshProc.Run()
 }
 
 func init() {
 	sshCmd.Flags().SetInterspersed(false)
 	sshCmd.Flags().BoolVar(&sshWakeup, "wakeup", false, "start a stopped sandbox, run the command, then stop it")
+	sshCmd.Flags().BoolVar(&sshProxyFlag, "proxy", false, "start proxies and tunnel them through the SSH connection")
 }
