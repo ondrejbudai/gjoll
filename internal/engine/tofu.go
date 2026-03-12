@@ -131,17 +131,17 @@ func Provision(name, envPath string) error {
 	// Run init script if present
 	if outputs.InitScript != "" {
 		fmt.Println("Waiting for SSH...")
-		if err := remote.WaitForSSH(outputs.PublicIP, outputs.SSHUser, keyPath, 5*time.Minute); err != nil {
+		if err := remote.WaitForSSH(sshConfig, name, outputs.PublicIP, 5*time.Minute); err != nil {
 			return err
 		}
 
 		fmt.Println("Running init script...")
-		if err := remote.RunScript(outputs.PublicIP, outputs.SSHUser, keyPath, outputs.InitScript); err != nil {
+		if err := remote.RunScript(sshConfig, name, outputs.InitScript); err != nil {
 			return fmt.Errorf("init script: %w", err)
 		}
 	} else {
 		fmt.Println("Waiting for SSH...")
-		if err := remote.WaitForSSH(outputs.PublicIP, outputs.SSHUser, keyPath, 5*time.Minute); err != nil {
+		if err := remote.WaitForSSH(sshConfig, name, outputs.PublicIP, 5*time.Minute); err != nil {
 			fmt.Printf("Warning: SSH not yet reachable: %v\n", err)
 		}
 	}
@@ -151,7 +151,7 @@ func Provision(name, envPath string) error {
 		fmt.Println("Copying files...")
 		for _, f := range outputs.CopyFiles {
 			fmt.Printf("  %s → %s\n", f.From, f.To)
-			if err := remote.CopyFile(outputs.PublicIP, outputs.SSHUser, keyPath, f.From, f.To); err != nil {
+			if err := remote.CopyFile(sshConfig, name, f.From, f.To); err != nil {
 				return fmt.Errorf("copy file %s: %w", f.From, err)
 			}
 		}
@@ -249,7 +249,7 @@ func Start(name string) error {
 	}
 
 	fmt.Println("Waiting for SSH...")
-	if err := remote.WaitForSSH(outputs.PublicIP, outputs.SSHUser, keyPath, 5*time.Minute); err != nil {
+	if err := remote.WaitForSSH(sshConfig, name, outputs.PublicIP, 5*time.Minute); err != nil {
 		fmt.Printf("Warning: SSH not yet reachable: %v\n", err)
 	}
 
