@@ -186,10 +186,10 @@ func ExpandTilde(path string) (string, error) {
 	return path, nil
 }
 
-// CopySecret copies a local file to the remote VM, preserving permissions.
+// CopyFile copies a local file to the remote VM, preserving permissions.
 // The localPath is expanded on the local machine; the remotePath is passed
 // as-is to the remote shell so that ~ resolves to the remote user's home.
-func CopySecret(ip, user, keyPath, localPath, remotePath string) error {
+func CopyFile(ip, user, keyPath, localPath, remotePath string) error {
 	local, err := ExpandTilde(localPath)
 	if err != nil {
 		return err

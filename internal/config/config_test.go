@@ -64,12 +64,12 @@ func TestParseOutputsInvalidJSON(t *testing.T) {
 	}
 }
 
-func TestParseOutputsCloneSecrets(t *testing.T) {
+func TestParseOutputsCopyFiles(t *testing.T) {
 	data := []byte(`{
 		"public_ip": {"value": "1.2.3.4", "type": "string"},
 		"instance_id": {"value": "i-abc123", "type": "string"},
 		"ssh_user": {"value": "ubuntu", "type": "string"},
-		"clone_secrets": {"value": [
+		"copy_files": {"value": [
 			{"from": "~/.ssh/id_ed25519"},
 			{"from": "~/.anthropic/api_key", "to": "/opt/secrets/key"}
 		], "type": ["list", "object"]}
@@ -79,18 +79,18 @@ func TestParseOutputsCloneSecrets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseOutputs() error: %v", err)
 	}
-	if len(o.CloneSecrets) != 2 {
-		t.Fatalf("CloneSecrets len = %d, want 2", len(o.CloneSecrets))
+	if len(o.CopyFiles) != 2 {
+		t.Fatalf("CopyFiles len = %d, want 2", len(o.CopyFiles))
 	}
-	if o.CloneSecrets[0].From != "~/.ssh/id_ed25519" || o.CloneSecrets[0].To != "~/.ssh/id_ed25519" {
-		t.Errorf("CloneSecrets[0] = %+v, want from=to=~/.ssh/id_ed25519", o.CloneSecrets[0])
+	if o.CopyFiles[0].From != "~/.ssh/id_ed25519" || o.CopyFiles[0].To != "~/.ssh/id_ed25519" {
+		t.Errorf("CopyFiles[0] = %+v, want from=to=~/.ssh/id_ed25519", o.CopyFiles[0])
 	}
-	if o.CloneSecrets[1].From != "~/.anthropic/api_key" || o.CloneSecrets[1].To != "/opt/secrets/key" {
-		t.Errorf("CloneSecrets[1] = %+v", o.CloneSecrets[1])
+	if o.CopyFiles[1].From != "~/.anthropic/api_key" || o.CopyFiles[1].To != "/opt/secrets/key" {
+		t.Errorf("CopyFiles[1] = %+v", o.CopyFiles[1])
 	}
 }
 
-func TestParseOutputsOptionalCloneSecrets(t *testing.T) {
+func TestParseOutputsOptionalCopyFiles(t *testing.T) {
 	data := []byte(`{
 		"public_ip": {"value": "1.2.3.4", "type": "string"},
 		"instance_id": {"value": "i-abc123", "type": "string"},
@@ -101,34 +101,34 @@ func TestParseOutputsOptionalCloneSecrets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseOutputs() error: %v", err)
 	}
-	if len(o.CloneSecrets) != 0 {
-		t.Errorf("CloneSecrets len = %d, want 0", len(o.CloneSecrets))
+	if len(o.CopyFiles) != 0 {
+		t.Errorf("CopyFiles len = %d, want 0", len(o.CopyFiles))
 	}
 }
 
-func TestParseOutputsCloneSecretsEmpty(t *testing.T) {
+func TestParseOutputsCopyFilesEmpty(t *testing.T) {
 	data := []byte(`{
 		"public_ip": {"value": "1.2.3.4", "type": "string"},
 		"instance_id": {"value": "i-abc123", "type": "string"},
 		"ssh_user": {"value": "ubuntu", "type": "string"},
-		"clone_secrets": {"value": [], "type": ["list", "object"]}
+		"copy_files": {"value": [], "type": ["list", "object"]}
 	}`)
 
 	o, err := ParseOutputs(data)
 	if err != nil {
 		t.Fatalf("ParseOutputs() error: %v", err)
 	}
-	if len(o.CloneSecrets) != 0 {
-		t.Errorf("CloneSecrets len = %d, want 0", len(o.CloneSecrets))
+	if len(o.CopyFiles) != 0 {
+		t.Errorf("CopyFiles len = %d, want 0", len(o.CopyFiles))
 	}
 }
 
-func TestParseOutputsCloneSecretsMissingFrom(t *testing.T) {
+func TestParseOutputsCopyFilesMissingFrom(t *testing.T) {
 	data := []byte(`{
 		"public_ip": {"value": "1.2.3.4", "type": "string"},
 		"instance_id": {"value": "i-abc123", "type": "string"},
 		"ssh_user": {"value": "ubuntu", "type": "string"},
-		"clone_secrets": {"value": [
+		"copy_files": {"value": [
 			{"to": "/some/path"},
 			{"from": "", "to": "/other/path"},
 			{"from": "~/.valid"}
@@ -139,20 +139,20 @@ func TestParseOutputsCloneSecretsMissingFrom(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseOutputs() error: %v", err)
 	}
-	if len(o.CloneSecrets) != 1 {
-		t.Fatalf("CloneSecrets len = %d, want 1 (only valid entry)", len(o.CloneSecrets))
+	if len(o.CopyFiles) != 1 {
+		t.Fatalf("CopyFiles len = %d, want 1 (only valid entry)", len(o.CopyFiles))
 	}
-	if o.CloneSecrets[0].From != "~/.valid" {
-		t.Errorf("CloneSecrets[0].From = %q, want %q", o.CloneSecrets[0].From, "~/.valid")
+	if o.CopyFiles[0].From != "~/.valid" {
+		t.Errorf("CopyFiles[0].From = %q, want %q", o.CopyFiles[0].From, "~/.valid")
 	}
 }
 
-func TestParseOutputsCloneSecretsDefaultTo(t *testing.T) {
+func TestParseOutputsCopyFilesDefaultTo(t *testing.T) {
 	data := []byte(`{
 		"public_ip": {"value": "1.2.3.4", "type": "string"},
 		"instance_id": {"value": "i-abc123", "type": "string"},
 		"ssh_user": {"value": "ubuntu", "type": "string"},
-		"clone_secrets": {"value": [
+		"copy_files": {"value": [
 			{"from": "/etc/myconfig"}
 		], "type": ["list", "object"]}
 	}`)
@@ -161,11 +161,11 @@ func TestParseOutputsCloneSecretsDefaultTo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseOutputs() error: %v", err)
 	}
-	if len(o.CloneSecrets) != 1 {
-		t.Fatalf("CloneSecrets len = %d, want 1", len(o.CloneSecrets))
+	if len(o.CopyFiles) != 1 {
+		t.Fatalf("CopyFiles len = %d, want 1", len(o.CopyFiles))
 	}
-	if o.CloneSecrets[0].To != "/etc/myconfig" {
-		t.Errorf("To = %q, want %q (should default to From)", o.CloneSecrets[0].To, "/etc/myconfig")
+	if o.CopyFiles[0].To != "/etc/myconfig" {
+		t.Errorf("To = %q, want %q (should default to From)", o.CopyFiles[0].To, "/etc/myconfig")
 	}
 }
 

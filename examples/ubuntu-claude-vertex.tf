@@ -111,5 +111,5 @@ output "proxy" {
   }
 }
 
-# Note: No clone_secrets output — credentials stay on your local machine!
+# Note: No copy_files output — credentials stay on your local machine!
 # The proxy injects GCP credentials via Application Default Credentials.
