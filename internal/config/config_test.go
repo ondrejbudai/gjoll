@@ -182,143 +182,157 @@ func TestParseOutputsEmptyValue(t *testing.T) {
 	}
 }
 
-func TestParseOutputsProxyGCP(t *testing.T) {
-	data := []byte(`{
-		"public_ip": {"value": "1.2.3.4", "type": "string"},
-		"instance_id": {"value": "i-abc123", "type": "string"},
-		"ssh_user": {"value": "ubuntu", "type": "string"},
-		"proxy": {"value": {
-			"target": "https://us-east5-aiplatform.googleapis.com",
-			"auth": "gcp",
-			"port": 18080
-		}, "type": "object"}
-	}`)
+func TestParseOutputsProxies(t *testing.T) {
+	tests := []struct {
+		name    string
+		data    string
+		want    []ProxyConfig
+		wantLen int
+	}{
+		{
+			name: "GCP proxy",
+			data: `{
+				"public_ip": {"value": "1.2.3.4", "type": "string"},
+				"instance_id": {"value": "i-abc123", "type": "string"},
+				"ssh_user": {"value": "ubuntu", "type": "string"},
+				"proxies": {"value": [
+					{"name": "vertex", "target": "https://us-east5-aiplatform.googleapis.com", "auth": "gcp", "port": 18080}
+				], "type": ["list", "object"]}
+			}`,
+			want: []ProxyConfig{
+				{Name: "vertex", Target: "https://us-east5-aiplatform.googleapis.com", Auth: "gcp", Port: 18080},
+			},
+		},
+		{
+			name: "API key proxy",
+			data: `{
+				"public_ip": {"value": "1.2.3.4", "type": "string"},
+				"instance_id": {"value": "i-abc123", "type": "string"},
+				"ssh_user": {"value": "ubuntu", "type": "string"},
+				"proxies": {"value": [
+					{"name": "anthropic", "target": "https://api.anthropic.com", "auth": "api-key", "api_key_file": "~/.anthropic/api_key", "port": 9000}
+				], "type": ["list", "object"]}
+			}`,
+			want: []ProxyConfig{
+				{Name: "anthropic", Target: "https://api.anthropic.com", Auth: "api-key", APIKeyFile: "~/.anthropic/api_key", Port: 9000},
+			},
+		},
+		{
+			name: "no-auth proxy",
+			data: `{
+				"public_ip": {"value": "1.2.3.4", "type": "string"},
+				"instance_id": {"value": "i-abc123", "type": "string"},
+				"ssh_user": {"value": "ubuntu", "type": "string"},
+				"proxies": {"value": [
+					{"name": "internal", "target": "https://internal.api.com", "port": 9000}
+				], "type": ["list", "object"]}
+			}`,
+			want: []ProxyConfig{
+				{Name: "internal", Target: "https://internal.api.com", Port: 9000},
+			},
+		},
+		{
+			name: "default port",
+			data: `{
+				"public_ip": {"value": "1.2.3.4", "type": "string"},
+				"instance_id": {"value": "i-abc123", "type": "string"},
+				"ssh_user": {"value": "ubuntu", "type": "string"},
+				"proxies": {"value": [
+					{"name": "vertex", "target": "https://api.example.com", "auth": "gcp"}
+				], "type": ["list", "object"]}
+			}`,
+			want: []ProxyConfig{
+				{Name: "vertex", Target: "https://api.example.com", Auth: "gcp", Port: 18080},
+			},
+		},
+		{
+			name: "multiple proxies",
+			data: `{
+				"public_ip": {"value": "1.2.3.4", "type": "string"},
+				"instance_id": {"value": "i-abc123", "type": "string"},
+				"ssh_user": {"value": "ubuntu", "type": "string"},
+				"proxies": {"value": [
+					{"name": "vertex", "target": "https://us-east5-aiplatform.googleapis.com", "auth": "gcp", "port": 18080},
+					{"name": "anthropic", "target": "https://api.anthropic.com", "auth": "api-key", "api_key_file": "~/.anthropic/api_key", "port": 18081}
+				], "type": ["list", "object"]}
+			}`,
+			want: []ProxyConfig{
+				{Name: "vertex", Target: "https://us-east5-aiplatform.googleapis.com", Auth: "gcp", Port: 18080},
+				{Name: "anthropic", Target: "https://api.anthropic.com", Auth: "api-key", APIKeyFile: "~/.anthropic/api_key", Port: 18081},
+			},
+		},
+		{
+			name: "no proxies output",
+			data: `{
+				"public_ip": {"value": "1.2.3.4", "type": "string"},
+				"instance_id": {"value": "i-abc123", "type": "string"},
+				"ssh_user": {"value": "ubuntu", "type": "string"}
+			}`,
+			wantLen: 0,
+		},
+		{
+			name: "skip entry missing name",
+			data: `{
+				"public_ip": {"value": "1.2.3.4", "type": "string"},
+				"instance_id": {"value": "i-abc123", "type": "string"},
+				"ssh_user": {"value": "ubuntu", "type": "string"},
+				"proxies": {"value": [
+					{"target": "https://api.example.com", "auth": "gcp"},
+					{"name": "valid", "target": "https://api.example.com"}
+				], "type": ["list", "object"]}
+			}`,
+			want: []ProxyConfig{
+				{Name: "valid", Target: "https://api.example.com", Port: 18080},
+			},
+		},
+		{
+			name: "skip entry missing target",
+			data: `{
+				"public_ip": {"value": "1.2.3.4", "type": "string"},
+				"instance_id": {"value": "i-abc123", "type": "string"},
+				"ssh_user": {"value": "ubuntu", "type": "string"},
+				"proxies": {"value": [
+					{"name": "bad", "auth": "gcp"}
+				], "type": ["list", "object"]}
+			}`,
+			wantLen: 0,
+		},
+	}
 
-	o, err := ParseOutputs(data)
-	if err != nil {
-		t.Fatalf("ParseOutputs() error: %v", err)
-	}
-	if o.Proxy == nil {
-		t.Fatal("Proxy = nil, want non-nil")
-	}
-	if o.Proxy.Target != "https://us-east5-aiplatform.googleapis.com" {
-		t.Errorf("Proxy.Target = %q, want %q", o.Proxy.Target, "https://us-east5-aiplatform.googleapis.com")
-	}
-	if o.Proxy.Auth != "gcp" {
-		t.Errorf("Proxy.Auth = %q, want %q", o.Proxy.Auth, "gcp")
-	}
-	if o.Proxy.Port != 18080 {
-		t.Errorf("Proxy.Port = %d, want 18080", o.Proxy.Port)
-	}
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			o, err := ParseOutputs([]byte(tt.data))
+			if err != nil {
+				t.Fatalf("ParseOutputs() error: %v", err)
+			}
 
-func TestParseOutputsProxyAPIKey(t *testing.T) {
-	data := []byte(`{
-		"public_ip": {"value": "1.2.3.4", "type": "string"},
-		"instance_id": {"value": "i-abc123", "type": "string"},
-		"ssh_user": {"value": "ubuntu", "type": "string"},
-		"proxy": {"value": {
-			"target": "https://api.anthropic.com",
-			"auth": "api-key",
-			"api_key_file": "~/.anthropic/api_key",
-			"port": 9000
-		}, "type": "object"}
-	}`)
-
-	o, err := ParseOutputs(data)
-	if err != nil {
-		t.Fatalf("ParseOutputs() error: %v", err)
-	}
-	if o.Proxy == nil {
-		t.Fatal("Proxy = nil, want non-nil")
-	}
-	if o.Proxy.Target != "https://api.anthropic.com" {
-		t.Errorf("Proxy.Target = %q, want %q", o.Proxy.Target, "https://api.anthropic.com")
-	}
-	if o.Proxy.Auth != "api-key" {
-		t.Errorf("Proxy.Auth = %q, want %q", o.Proxy.Auth, "api-key")
-	}
-	if o.Proxy.APIKeyFile != "~/.anthropic/api_key" {
-		t.Errorf("Proxy.APIKeyFile = %q, want %q", o.Proxy.APIKeyFile, "~/.anthropic/api_key")
-	}
-	if o.Proxy.Port != 9000 {
-		t.Errorf("Proxy.Port = %d, want 9000", o.Proxy.Port)
-	}
-}
-
-func TestParseOutputsProxyDefaultPort(t *testing.T) {
-	data := []byte(`{
-		"public_ip": {"value": "1.2.3.4", "type": "string"},
-		"instance_id": {"value": "i-abc123", "type": "string"},
-		"ssh_user": {"value": "ubuntu", "type": "string"},
-		"proxy": {"value": {
-			"target": "https://api.anthropic.com",
-			"auth": "gcp"
-		}, "type": "object"}
-	}`)
-
-	o, err := ParseOutputs(data)
-	if err != nil {
-		t.Fatalf("ParseOutputs() error: %v", err)
-	}
-	if o.Proxy == nil {
-		t.Fatal("Proxy = nil, want non-nil")
-	}
-	if o.Proxy.Port != 18080 {
-		t.Errorf("Proxy.Port = %d, want 18080 (default)", o.Proxy.Port)
-	}
-}
-
-func TestParseOutputsOptionalProxy(t *testing.T) {
-	data := []byte(`{
-		"public_ip": {"value": "1.2.3.4", "type": "string"},
-		"instance_id": {"value": "i-abc123", "type": "string"},
-		"ssh_user": {"value": "ubuntu", "type": "string"}
-	}`)
-
-	o, err := ParseOutputs(data)
-	if err != nil {
-		t.Fatalf("ParseOutputs() error: %v", err)
-	}
-	if o.Proxy != nil {
-		t.Errorf("Proxy = %+v, want nil", o.Proxy)
-	}
-}
-
-func TestParseOutputsProxyMissingTarget(t *testing.T) {
-	data := []byte(`{
-		"public_ip": {"value": "1.2.3.4", "type": "string"},
-		"instance_id": {"value": "i-abc123", "type": "string"},
-		"ssh_user": {"value": "ubuntu", "type": "string"},
-		"proxy": {"value": {
-			"auth": "gcp"
-		}, "type": "object"}
-	}`)
-
-	o, err := ParseOutputs(data)
-	if err != nil {
-		t.Fatalf("ParseOutputs() error: %v", err)
-	}
-	if o.Proxy != nil {
-		t.Errorf("Proxy = %+v, want nil (missing target)", o.Proxy)
-	}
-}
-
-func TestParseOutputsProxyMissingAuth(t *testing.T) {
-	data := []byte(`{
-		"public_ip": {"value": "1.2.3.4", "type": "string"},
-		"instance_id": {"value": "i-abc123", "type": "string"},
-		"ssh_user": {"value": "ubuntu", "type": "string"},
-		"proxy": {"value": {
-			"target": "https://api.anthropic.com"
-		}, "type": "object"}
-	}`)
-
-	o, err := ParseOutputs(data)
-	if err != nil {
-		t.Fatalf("ParseOutputs() error: %v", err)
-	}
-	if o.Proxy != nil {
-		t.Errorf("Proxy = %+v, want nil (missing auth)", o.Proxy)
+			if tt.want != nil {
+				if len(o.Proxies) != len(tt.want) {
+					t.Fatalf("Proxies len = %d, want %d", len(o.Proxies), len(tt.want))
+				}
+				for i, want := range tt.want {
+					got := o.Proxies[i]
+					if got.Name != want.Name {
+						t.Errorf("Proxies[%d].Name = %q, want %q", i, got.Name, want.Name)
+					}
+					if got.Target != want.Target {
+						t.Errorf("Proxies[%d].Target = %q, want %q", i, got.Target, want.Target)
+					}
+					if got.Auth != want.Auth {
+						t.Errorf("Proxies[%d].Auth = %q, want %q", i, got.Auth, want.Auth)
+					}
+					if got.APIKeyFile != want.APIKeyFile {
+						t.Errorf("Proxies[%d].APIKeyFile = %q, want %q", i, got.APIKeyFile, want.APIKeyFile)
+					}
+					if got.Port != want.Port {
+						t.Errorf("Proxies[%d].Port = %d, want %d", i, got.Port, want.Port)
+					}
+				}
+			} else {
+				if len(o.Proxies) != tt.wantLen {
+					t.Errorf("Proxies len = %d, want %d", len(o.Proxies), tt.wantLen)
+				}
+			}
+		})
 	}
 }

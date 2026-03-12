@@ -195,6 +195,40 @@ func TestProxyPathPreservation(t *testing.T) {
 	}
 }
 
+func TestProxyNoAuth(t *testing.T) {
+	// Fake upstream that echoes both auth-related headers
+	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		// Should have neither Authorization nor x-api-key
+		_, _ = w.Write([]byte(r.Header.Get("Authorization") + "|" + r.Header.Get("x-api-key")))
+	}))
+	defer upstream.Close()
+
+	p, err := New(upstream.URL, "", "", WithTransport(upstream.Client().Transport))
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+
+	ctx := context.Background()
+	port, err := p.Start(ctx)
+	if err != nil {
+		t.Fatalf("Start() error: %v", err)
+	}
+	defer func() { _ = p.Stop(ctx) }()
+
+	client := &http.Client{Transport: upstream.Client().Transport}
+	resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/test", port))
+	if err != nil {
+		t.Fatalf("proxy request error: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, _ := io.ReadAll(resp.Body)
+	if string(body) != "|" {
+		t.Errorf("expected no auth headers, got %q", string(body))
+	}
+}
+
 func TestProxyInvalidTarget(t *testing.T) {
 	_, err := New("not-a-url", "gcp", "")
 	if err == nil {

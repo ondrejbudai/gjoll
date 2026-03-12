@@ -14,14 +14,14 @@ import (
 
 // Instance holds metadata about a provisioned sandbox.
 type Instance struct {
-	Name       string               `json:"name"`
-	EnvPath    string               `json:"env_path"`
-	PublicIP   string               `json:"public_ip"`
-	InstanceID string               `json:"instance_id"`
-	SSHUser    string               `json:"ssh_user"`
-	Status     string               `json:"status"` // running, stopped, unknown
-	CreatedAt  time.Time            `json:"created_at"`
-	Proxy      *config.ProxyConfig  `json:"proxy,omitempty"`
+	Name       string              `json:"name"`
+	EnvPath    string              `json:"env_path"`
+	PublicIP   string              `json:"public_ip"`
+	InstanceID string              `json:"instance_id"`
+	SSHUser    string              `json:"ssh_user"`
+	Status     string              `json:"status"` // running, stopped, unknown
+	CreatedAt  time.Time           `json:"created_at"`
+	Proxies    []config.ProxyConfig `json:"proxies,omitempty"`
 }
 
 // Save writes the instance metadata to instance.json in the instance directory.
