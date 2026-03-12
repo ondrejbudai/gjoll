@@ -7,10 +7,23 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
+
+func singleJoiningSlash(a, b string) string {
+	aslash := strings.HasSuffix(a, "/")
+	bslash := strings.HasPrefix(b, "/")
+	switch {
+	case aslash && bslash:
+		return a + b[1:]
+	case !aslash && !bslash:
+		return a + "/" + b
+	}
+	return a + b
+}
 
 // Proxy is a reverse HTTP proxy that injects authentication headers.
 type Proxy struct {
@@ -85,10 +98,13 @@ func (p *Proxy) Start(ctx context.Context) (int, error) {
 	// Create reverse proxy
 	proxy := &httputil.ReverseProxy{
 		Director: func(req *http.Request) {
-			// Rewrite request to target
+			// Rewrite request to target, preserving any path prefix
 			req.URL.Scheme = p.targetURL.Scheme
 			req.URL.Host = p.targetURL.Host
 			req.Host = p.targetURL.Host
+			if p.targetURL.Path != "" {
+				req.URL.Path = singleJoiningSlash(p.targetURL.Path, req.URL.Path)
+			}
 
 			// Inject authentication header
 			if p.authMode == "gcp" && p.tokenSrc != nil {
