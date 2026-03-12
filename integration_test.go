@@ -127,6 +127,12 @@ func TestIntegration(t *testing.T) {
 		git("add", "README.md")
 		git("commit", "-m", "initial commit")
 
+		// Switch to a non-default branch to verify that
+		// receive.denyCurrentBranch=updateInstead populates the working
+		// tree even when the pushed branch differs from the remote's
+		// initial HEAD (which defaults to main/master after git init).
+		git("checkout", "-b", "test-branch")
+
 		// Push to VM
 		bin, _ := filepath.Abs("gjoll")
 		pushCmd := exec.Command(bin, "push", sandboxName)
