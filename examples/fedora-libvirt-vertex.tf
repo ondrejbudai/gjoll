@@ -50,7 +50,8 @@ resource "libvirt_domain" "sandbox" {
   vcpu        = 2
   running     = true
 
-  os = { type = "hvm" }
+  cpu = { mode = "host-passthrough" }
+  os  = { type = "hvm" }
 
   devices = {
     disks = [
@@ -95,14 +96,26 @@ output "init_script" {
   value = <<-EOT
     #!/bin/bash
     set -euo pipefail
-    sudo dnf install -y git tmux gcc make curl
+    curl -fsSL https://claude.ai/install.sh | bash
+    sudo dnf install -y git-core
+
+    # Configure Claude Code to use Vertex AI via local proxy
+    cat >> ~/.bashrc <<'RCEOF'
+    export CLAUDE_CODE_USE_VERTEX=1
+    export CLOUD_ML_REGION=us-east5
+    export ANTHROPIC_VERTEX_PROJECT_ID=yourprojecthere
+    export ANTHROPIC_VERTEX_BASE_URL=http://localhost:18080
+    export CLAUDE_CODE_SKIP_VERTEX_AUTH=1
+    export CLAUDE_MODEL=claude-opus-4-6
+    alias claude='claude --dangerously-skip-permissions'
+    RCEOF
   EOT
 }
 
 # Proxy configuration for Vertex AI
 output "proxy" {
   value = {
-    target = "https://us-east5-aiplatform.googleapis.com"
+    target = "https://us-east5-aiplatform.googleapis.com/v1"
     auth   = "gcp"
     port   = 18080
   }
