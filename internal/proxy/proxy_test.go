@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,6 +24,13 @@ func (m *mockTokenSource) Token() (*oauth2.Token, error) {
 		TokenType:   "Bearer",
 		Expiry:      time.Now().Add(time.Hour),
 	}, nil
+}
+
+// failingTokenSource implements oauth2.TokenSource that always returns an error.
+type failingTokenSource struct{}
+
+func (f *failingTokenSource) Token() (*oauth2.Token, error) {
+	return nil, fmt.Errorf("token refresh failed: credentials expired")
 }
 
 func TestProxyGCPAuthInjection(t *testing.T) {
@@ -226,6 +234,44 @@ func TestProxyNoAuth(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	if string(body) != "|" {
 		t.Errorf("expected no auth headers, got %q", string(body))
+	}
+}
+
+func TestProxyGCPTokenError(t *testing.T) {
+	// Fake upstream — should never be reached
+	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("upstream was reached despite token error")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	p, err := New(upstream.URL, "gcp", "",
+		WithTokenSource(&failingTokenSource{}),
+		WithTransport(upstream.Client().Transport))
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+
+	ctx := context.Background()
+	port, err := p.Start(ctx)
+	if err != nil {
+		t.Fatalf("Start() error: %v", err)
+	}
+	defer func() { _ = p.Stop(ctx) }()
+
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/test", port))
+	if err != nil {
+		t.Fatalf("proxy request error: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusBadGateway {
+		t.Errorf("status = %d, want %d (502 Bad Gateway)", resp.StatusCode, http.StatusBadGateway)
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), "fetching GCP token") {
+		t.Errorf("body = %q, want it to mention token error", string(body))
 	}
 }
 
