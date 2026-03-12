@@ -121,17 +121,12 @@ func sshWithProxy(name, configPath string, command ...string) error {
 	defer ps.stop(ctx)
 
 	// Build SSH args: config, reverse tunnels, host, then command
-	sshPath, err := exec.LookPath("ssh")
-	if err != nil {
-		return fmt.Errorf("ssh not found: %w", err)
-	}
-
 	sshArgs := []string{"-F", configPath}
 	sshArgs = append(sshArgs, ps.tunnelArgs...)
 	sshArgs = append(sshArgs, name)
 	sshArgs = append(sshArgs, command...)
 
-	sshProc := exec.Command(sshPath, sshArgs...)
+	sshProc := exec.Command("ssh", sshArgs...)
 	sshProc.Stdin = os.Stdin
 	sshProc.Stdout = os.Stdout
 	sshProc.Stderr = os.Stderr
