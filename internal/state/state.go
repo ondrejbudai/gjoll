@@ -8,8 +8,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/obudai/gjoll/internal/config"
-	"github.com/obudai/gjoll/internal/paths"
+	"github.com/ondrejbudai/gjoll/internal/config"
+	"github.com/ondrejbudai/gjoll/internal/paths"
 )
 
 // Instance holds metadata about a provisioned sandbox.

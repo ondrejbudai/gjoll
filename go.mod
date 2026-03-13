@@ -1,4 +1,4 @@
-module github.com/obudai/gjoll
+module github.com/ondrejbudai/gjoll
 
 go 1.25.0
 

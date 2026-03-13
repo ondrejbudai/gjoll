@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"github.com/obudai/gjoll/internal/paths"
-	"github.com/obudai/gjoll/internal/remote"
+	"github.com/ondrejbudai/gjoll/internal/paths"
+	"github.com/ondrejbudai/gjoll/internal/remote"
 	"github.com/spf13/cobra"
 )
 

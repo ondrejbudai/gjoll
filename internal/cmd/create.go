@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/obudai/gjoll/internal/engine"
-	"github.com/obudai/gjoll/internal/state"
+	"github.com/ondrejbudai/gjoll/internal/engine"
+	"github.com/ondrejbudai/gjoll/internal/state"
 	"github.com/spf13/cobra"
 )
 
