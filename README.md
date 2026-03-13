@@ -7,7 +7,7 @@ A CLI tool to provision cloud VM sandboxes for coding agents. Each environment i
 ## Install
 
 ```bash
-go install github.com/obudai/gjoll/cmd/gjoll@latest
+go install github.com/ondrejbudai/gjoll/cmd/gjoll@latest
 ```
 
 ### Prerequisites

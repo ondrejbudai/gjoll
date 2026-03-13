@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/obudai/gjoll/internal/config"
-	"github.com/obudai/gjoll/internal/paths"
-	"github.com/obudai/gjoll/internal/remote"
-	"github.com/obudai/gjoll/internal/state"
+	"github.com/ondrejbudai/gjoll/internal/config"
+	"github.com/ondrejbudai/gjoll/internal/paths"
+	"github.com/ondrejbudai/gjoll/internal/remote"
+	"github.com/ondrejbudai/gjoll/internal/state"
 )
 
 const injectedTF = `variable "gjoll_ssh_pubkey" {

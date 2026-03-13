@@ -5,7 +5,7 @@ import (
 	"os"
 	"text/tabwriter"
 
-	"github.com/obudai/gjoll/internal/state"
+	"github.com/ondrejbudai/gjoll/internal/state"
 	"github.com/spf13/cobra"
 )
 
