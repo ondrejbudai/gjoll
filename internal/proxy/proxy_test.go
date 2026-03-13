@@ -282,10 +282,24 @@ func TestProxyInvalidTarget(t *testing.T) {
 	}
 }
 
-func TestProxyNonHTTPSTarget(t *testing.T) {
-	_, err := New("http://insecure.com", "gcp", "")
-	if err == nil {
-		t.Error("New() expected error for non-HTTPS target")
+func TestProxyTargetScheme(t *testing.T) {
+	tests := []struct {
+		name    string
+		target  string
+		wantErr bool
+	}{
+		{"https is allowed", "https://example.com", false},
+		{"http is allowed", "http://example.com", false},
+		{"ftp is rejected", "ftp://example.com", true},
+		{"empty scheme is rejected", "://example.com", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := New(tt.target, "raw", "test-key")
+			if (err != nil) != tt.wantErr {
+				t.Errorf("New(%q) error = %v, wantErr %v", tt.target, err, tt.wantErr)
+			}
+		})
 	}
 }
 

@@ -61,8 +61,8 @@ func New(target, authMode, apiKey string, opts ...Option) (*Proxy, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid target URL: %w", err)
 	}
-	if targetURL.Scheme != "https" {
-		return nil, fmt.Errorf("target must use https, got %s", targetURL.Scheme)
+	if targetURL.Scheme != "https" && targetURL.Scheme != "http" {
+		return nil, fmt.Errorf("target must use https or http, got %s", targetURL.Scheme)
 	}
 
 	p := &Proxy{
