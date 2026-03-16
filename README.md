@@ -55,10 +55,12 @@ gjoll down fedora-dev
 | `gjoll ssh <name> [command...]` | SSH into sandbox (or run a command) |
 | `gjoll ssh --wakeup <name> -- <cmd>` | Start, run command, stop |
 | `gjoll ssh --proxy <name>` | SSH with proxies tunneled through the connection |
+| `gjoll ssh -R port:host:hostport <name>` | SSH with extra reverse tunnels |
 | `gjoll push <name> [--path]` | Git push current repo to VM |
 | `gjoll pull <name> [refspec] [--path]` | Git fetch from VM, create local branch |
 | `gjoll cp <name> <src> <dest>` | Copy files (prefix remote paths with `:`) |
 | `gjoll proxy <name>` | Start credential-injecting proxies with SSH reverse tunnels |
+| `gjoll proxy -R port:host:hostport <name>` | Proxy with extra reverse tunnels |
 
 ## Environment Files
 
@@ -184,6 +186,31 @@ curl http://localhost:18080/v1/messages  # authenticated request
 ```
 
 Applications on the VM connect to `http://localhost:<port>` and `gjoll proxy` handles the rest.
+
+### Extra reverse tunnels (-R)
+
+Both `gjoll proxy` and `gjoll ssh` accept `-R` (long form `--reverse`) to set up
+additional SSH reverse tunnels, using the same syntax as `ssh -R`. This is useful
+for forwarding services that don't need credential injection (e.g. a local MCP
+server or database).
+
+```bash
+# Forward local port 3000 to port 8080 on the VM
+gjoll ssh mybox -R 8080:localhost:3000
+
+# Combine with --proxy for terraform-configured proxies + extra tunnels
+gjoll ssh mybox --proxy -R 9090:localhost:80
+
+# Multiple tunnels
+gjoll proxy mybox -R 8080:localhost:3000 -R 9090:localhost:5432
+
+# Works without any terraform proxy config
+gjoll proxy mybox -R 8080:localhost:3000
+```
+
+The `-R` flag can be specified multiple times and composes with terraform-configured
+proxies. When using `gjoll proxy`, at least one of terraform proxies or `-R` flags
+must be provided.
 
 See `examples/ubuntu-claude-vertex.tf` for a complete Vertex AI + Claude Code setup.
 

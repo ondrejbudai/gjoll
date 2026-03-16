@@ -14,8 +14,9 @@ import (
 )
 
 var (
-	sshWakeup    bool
-	sshProxyFlag bool
+	sshWakeup         bool
+	sshProxyFlag      bool
+	sshReverseTunnels []string
 )
 
 var sshCmd = &cobra.Command{
@@ -32,13 +33,18 @@ again after the command finishes (requires a command).
 With --proxy, credential-injecting proxies are started and reverse-tunneled
 through the SSH connection. The proxies are stopped when SSH exits.
 
+Additional reverse tunnels can be specified with -R, using the same syntax
+as ssh(1). Can be combined with --proxy or used alone.
+
 Examples:
-  gjoll ssh mybox                          Interactive shell
-  gjoll ssh mybox -- uname -a              Run a command
-  gjoll ssh mybox --wakeup -- uname -a     Start, run, stop
-  gjoll ssh mybox --proxy                  Shell with proxies
-  gjoll ssh mybox --proxy -- claude        Run command with proxies
-  gjoll ssh mybox --wakeup --proxy -- cmd  Wakeup + proxies`,
+  gjoll ssh mybox                              Interactive shell
+  gjoll ssh mybox -- uname -a                  Run a command
+  gjoll ssh mybox --wakeup -- uname -a         Start, run, stop
+  gjoll ssh mybox --proxy                      Shell with proxies
+  gjoll ssh mybox --proxy -- claude            Run command with proxies
+  gjoll ssh mybox --wakeup --proxy -- cmd      Wakeup + proxies
+  gjoll ssh mybox -R 8080:localhost:3000       Reverse tunnel
+  gjoll ssh mybox --proxy -R 9090:localhost:80 Proxy + extra tunnel`,
 	Args:               cobra.MinimumNArgs(1),
 	DisableFlagParsing: false,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -92,8 +98,10 @@ Examples:
 		}
 		configPath := remote.SSHConfigPath(instanceDir)
 
-		if sshProxyFlag {
-			return sshWithProxy(name, configPath, args[1:]...)
+		extraTunnelArgs := reverseTunnelArgs(sshReverseTunnels)
+
+		if sshProxyFlag || len(extraTunnelArgs) > 0 {
+			return sshWithProxy(name, configPath, extraTunnelArgs, args[1:]...)
 		}
 
 		return remote.Connect(configPath, name, args[1:]...)
@@ -102,14 +110,15 @@ Examples:
 
 // sshWithProxy starts proxies, opens SSH with reverse tunnels, and cleans up.
 // Unlike remote.Connect, this always runs SSH as a subprocess so proxies can
-// be stopped when the session ends.
-func sshWithProxy(name, configPath string, command ...string) error {
+// be stopped when the session ends. extraTunnelArgs are additional SSH -R flags
+// specified via the command line.
+func sshWithProxy(name, configPath string, extraTunnelArgs []string, command ...string) error {
 	inst, err := state.Load(name)
 	if err != nil {
 		return err
 	}
 
-	if len(inst.Proxies) == 0 {
+	if sshProxyFlag && len(inst.Proxies) == 0 {
 		return fmt.Errorf("no proxies configured for instance %q — cannot use --proxy", name)
 	}
 
@@ -123,6 +132,7 @@ func sshWithProxy(name, configPath string, command ...string) error {
 	// Build SSH args: config, reverse tunnels, host, then command
 	sshArgs := []string{"-F", configPath}
 	sshArgs = append(sshArgs, ps.tunnelArgs...)
+	sshArgs = append(sshArgs, extraTunnelArgs...)
 	sshArgs = append(sshArgs, name)
 	sshArgs = append(sshArgs, command...)
 
@@ -131,11 +141,18 @@ func sshWithProxy(name, configPath string, command ...string) error {
 	sshProc.Stdout = os.Stdout
 	sshProc.Stderr = os.Stderr
 
-	fmt.Printf("Proxies active on %s:\n", name)
-	for _, cfg := range inst.Proxies {
-		fmt.Printf("  %s → http://localhost:%d\n", cfg.Name, cfg.Port)
+	if len(inst.Proxies) > 0 {
+		fmt.Printf("Proxies active on %s:\n", name)
+		for _, cfg := range inst.Proxies {
+			fmt.Printf("  %s → http://localhost:%d\n", cfg.Name, cfg.Port)
+		}
 	}
-	fmt.Println()
+	for _, rt := range sshReverseTunnels {
+		fmt.Printf("  reverse tunnel: -R %s\n", rt)
+	}
+	if len(inst.Proxies) > 0 || len(sshReverseTunnels) > 0 {
+		fmt.Println()
+	}
 
 	return sshProc.Run()
 }
@@ -144,4 +161,6 @@ func init() {
 	sshCmd.Flags().SetInterspersed(false)
 	sshCmd.Flags().BoolVar(&sshWakeup, "wakeup", false, "start a stopped sandbox, run the command, then stop it")
 	sshCmd.Flags().BoolVar(&sshProxyFlag, "proxy", false, "start proxies and tunnel them through the SSH connection")
+	sshCmd.Flags().StringArrayVarP(&sshReverseTunnels, "reverse", "R", nil,
+		"reverse port forwarding, same as ssh -R (can be specified multiple times)")
 }
