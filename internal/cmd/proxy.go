@@ -17,6 +17,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var proxyReverseTunnels []string
+
 var proxyCmd = &cobra.Command{
 	Use:   "proxy <name>",
 	Short: "Start credential-injecting proxies with SSH reverse tunnels",
@@ -25,9 +27,27 @@ var proxyCmd = &cobra.Command{
 This allows API clients on the VM to make authenticated requests without
 having credentials on the VM.
 
-The proxy configuration comes from the 'proxies' output in the terraform file.`,
+The proxy configuration comes from the 'proxies' output in the terraform file.
+
+Additional reverse tunnels can be specified with -R, using the same syntax
+as ssh(1):
+  gjoll proxy mybox -R 8080:localhost:3000`,
 	Args: cobra.ExactArgs(1),
 	RunE: runProxy,
+}
+
+// reverseTunnelArgs converts a list of -R values into SSH argument pairs.
+func reverseTunnelArgs(specs []string) []string {
+	var args []string
+	for _, spec := range specs {
+		args = append(args, "-R", spec)
+	}
+	return args
+}
+
+func init() {
+	proxyCmd.Flags().StringArrayVarP(&proxyReverseTunnels, "reverse", "R", nil,
+		"reverse port forwarding, same as ssh -R (can be specified multiple times)")
 }
 
 // proxySet holds running proxies and their associated SSH tunnel args.
@@ -110,8 +130,10 @@ func runProxy(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("loading instance: %w", err)
 	}
 
-	if len(inst.Proxies) == 0 {
-		return fmt.Errorf("no proxies configured for instance %q", name)
+	extraTunnelArgs := reverseTunnelArgs(proxyReverseTunnels)
+
+	if len(inst.Proxies) == 0 && len(extraTunnelArgs) == 0 {
+		return fmt.Errorf("no proxies configured for instance %q (use -R to add reverse tunnels)", name)
 	}
 
 	instanceDir, err := paths.InstanceDir(name)
@@ -133,6 +155,7 @@ func runProxy(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Starting SSH reverse tunnel to %s...\n", name)
 	sshArgs := []string{"-F", sshConfigPath}
 	sshArgs = append(sshArgs, ps.tunnelArgs...)
+	sshArgs = append(sshArgs, extraTunnelArgs...)
 	sshArgs = append(sshArgs, "-N", name) // no remote command
 
 	sshProc := exec.Command("ssh", sshArgs...)
@@ -146,6 +169,9 @@ func runProxy(cmd *cobra.Command, args []string) error {
 	fmt.Printf("\nProxies running!\n")
 	for _, cfg := range inst.Proxies {
 		fmt.Printf("  %s → http://localhost:%d on %s\n", cfg.Name, cfg.Port, name)
+	}
+	for _, rt := range proxyReverseTunnels {
+		fmt.Printf("  reverse tunnel: -R %s\n", rt)
 	}
 	fmt.Printf("  Press Ctrl+C to stop\n\n")
 

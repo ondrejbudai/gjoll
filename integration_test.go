@@ -3,11 +3,16 @@
 package main
 
 import (
+	"context"
+	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 const (
@@ -167,6 +172,48 @@ func TestIntegration(t *testing.T) {
 		}
 		if !strings.Contains(string(showOut), "vm-change") {
 			t.Errorf("pulled content missing vm-change:\n%s", showOut)
+		}
+	})
+
+	t.Run("ssh-reverse-tunnel", func(t *testing.T) {
+		// Start a local HTTP server that the reverse tunnel will expose
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatalf("listening: %v", err)
+		}
+		localPort := listener.Addr().(*net.TCPAddr).Port
+
+		srv := &http.Server{
+			Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				fmt.Fprint(w, "gjoll-tunnel-ok")
+			}),
+		}
+		go func() { _ = srv.Serve(listener) }()
+		defer srv.Shutdown(context.Background())
+
+		remotePort := 19876
+
+		// Run ssh with -R in the background: tunnel remotePort on VM to localPort here
+		bin, _ := filepath.Abs("gjoll")
+		sshCmd := exec.Command(bin, "ssh", sandboxName,
+			"-R", fmt.Sprintf("%d:127.0.0.1:%d", remotePort, localPort),
+			"--", "sleep", "30")
+		if err := sshCmd.Start(); err != nil {
+			t.Fatalf("starting ssh with -R: %v", err)
+		}
+		defer func() {
+			_ = sshCmd.Process.Kill()
+			_ = sshCmd.Wait()
+		}()
+
+		// Give the tunnel a moment to establish
+		time.Sleep(3 * time.Second)
+
+		// Curl through the tunnel from the VM
+		out := gjoll(t, "ssh", sandboxName, "curl", "-s",
+			fmt.Sprintf("http://127.0.0.1:%d/", remotePort))
+		if !strings.Contains(out, "gjoll-tunnel-ok") {
+			t.Errorf("reverse tunnel response = %q, want 'gjoll-tunnel-ok'", out)
 		}
 	})
 
