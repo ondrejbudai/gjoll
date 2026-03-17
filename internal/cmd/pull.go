@@ -19,8 +19,8 @@ without running "gjoll push" first.
 The optional refspec argument controls which branch to fetch and what to name
 the local branch:
 
-  gjoll pull my-vm                       # auto-detect remote branch → gjoll/my-vm
-  gjoll pull my-vm feature               # fetch "feature" → gjoll/my-vm
+  gjoll pull my-vm                       # auto-detect remote branch → gjoll-my-vm
+  gjoll pull my-vm feature               # fetch "feature" → gjoll-my-vm
   gjoll pull my-vm feature:my-branch     # fetch "feature" → my-branch
   gjoll pull my-vm :my-branch            # auto-detect remote branch → my-branch`,
 	Args: cobra.RangeArgs(1, 2),
