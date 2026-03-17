@@ -3,6 +3,7 @@ package remote
 import (
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 )
 
@@ -45,6 +46,29 @@ func TestParseRefspec(t *testing.T) {
 			if gotRemote != tt.wantRemote || gotLocal != tt.wantLocal {
 				t.Errorf("ParseRefspec(%q) = (%q, %q), want (%q, %q)",
 					tt.arg, gotRemote, gotLocal, tt.wantRemote, tt.wantLocal)
+			}
+		})
+	}
+}
+
+func TestDefaultLocalBranch(t *testing.T) {
+	tests := []struct {
+		name string
+		want string
+	}{
+		{"my-vm", "gjoll-my-vm"},
+		{"fedora-dev", "gjoll-fedora-dev"},
+		{"test", "gjoll-test"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := DefaultLocalBranch(tt.name)
+			if got != tt.want {
+				t.Errorf("DefaultLocalBranch(%q) = %q, want %q", tt.name, got, tt.want)
+			}
+			if strings.Contains(got, "/") {
+				t.Errorf("DefaultLocalBranch(%q) = %q, contains '/' which breaks tools like lazygit", tt.name, got)
 			}
 		})
 	}

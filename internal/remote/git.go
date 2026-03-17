@@ -26,6 +26,14 @@ func ParseRefspec(arg string) (remoteBranch, localBranch string) {
 	return arg, ""
 }
 
+// DefaultLocalBranch returns the default local branch name for a pull from the
+// given sandbox. The name uses a "gjoll-" prefix with a hyphen separator to
+// avoid issues with tools like lazygit that treat "/" in branch names as
+// directory separators.
+func DefaultLocalBranch(name string) string {
+	return "gjoll-" + name
+}
+
 // ensureRemote adds the named git remote if it doesn't exist, or updates its
 // URL if it does.
 func ensureRemote(remoteName, remoteURL string) error {
@@ -100,13 +108,13 @@ func GitPush(configPath, name, remotePath string) error {
 // doesn't exist yet). remoteBranch selects which branch to fetch; when empty the
 // remote HEAD is detected automatically with a fallback to main/master.
 // localBranch is the local branch name to create; when empty it defaults to
-// "gjoll/<name>".
+// "gjoll-<name>".
 func GitPull(configPath, name, remotePath, remoteBranch, localBranch string) error {
 	if remotePath == "" {
 		remotePath = "~/project"
 	}
 	if localBranch == "" {
-		localBranch = "gjoll/" + name
+		localBranch = DefaultLocalBranch(name)
 	}
 
 	sshCmd := fmt.Sprintf("ssh -F '%s'", configPath)

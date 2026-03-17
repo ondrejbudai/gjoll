@@ -164,7 +164,7 @@ func TestIntegration(t *testing.T) {
 		}
 
 		// Verify the VM change arrived locally
-		showCmd := exec.Command("git", "show", "gjoll/"+sandboxName+":README.md")
+		showCmd := exec.Command("git", "show", "gjoll-"+sandboxName+":README.md")
 		showCmd.Dir = repoDir
 		showOut, err := showCmd.CombinedOutput()
 		if err != nil {

@@ -110,8 +110,8 @@ gjoll pull my-vm --path ~/myapp
 and what local branch name to use:
 
 ```bash
-gjoll pull my-vm                         # auto-detect remote branch → gjoll/my-vm
-gjoll pull my-vm feature                 # fetch "feature" → gjoll/my-vm
+gjoll pull my-vm                         # auto-detect remote branch → gjoll-my-vm
+gjoll pull my-vm feature                 # fetch "feature" → gjoll-my-vm
 gjoll pull my-vm feature:my-branch       # fetch "feature" → my-branch
 gjoll pull my-vm :my-branch              # auto-detect remote branch → my-branch
 ```
