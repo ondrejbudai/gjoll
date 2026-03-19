@@ -7,18 +7,22 @@ import (
 )
 
 var downCmd = &cobra.Command{
-	Use:   "down <name>",
+	Use:   "down <name> [name...]",
 	Short: "Destroy a sandbox and all its resources",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		name := args[0]
+		for _, name := range args {
+			lock, err := state.Lock(name)
+			if err != nil {
+				return err
+			}
 
-		lock, err := state.Lock(name)
-		if err != nil {
-			return err
+			if err := engine.Destroy(name); err != nil {
+				state.Unlock(lock)
+				return err
+			}
+			state.Unlock(lock)
 		}
-		defer state.Unlock(lock)
-
-		return engine.Destroy(name)
+		return nil
 	},
 }
