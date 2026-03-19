@@ -7,21 +7,25 @@ import (
 )
 
 var stopCmd = &cobra.Command{
-	Use:   "stop <name>",
+	Use:   "stop <name> [name...]",
 	Short: "Stop a running sandbox",
 	Long: `Stops a running sandbox by setting gjoll_instance_state to "stopped"
 and running tofu apply. The instance is preserved and can be started again
 with "gjoll start".`,
-	Args: cobra.ExactArgs(1),
+	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		name := args[0]
+		for _, name := range args {
+			lock, err := state.Lock(name)
+			if err != nil {
+				return err
+			}
 
-		lock, err := state.Lock(name)
-		if err != nil {
-			return err
+			if err := engine.Stop(name); err != nil {
+				state.Unlock(lock)
+				return err
+			}
+			state.Unlock(lock)
 		}
-		defer state.Unlock(lock)
-
-		return engine.Stop(name)
+		return nil
 	},
 }
