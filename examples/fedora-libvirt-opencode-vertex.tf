@@ -6,20 +6,6 @@ terraform {
 
 provider "libvirt" { uri = "qemu:///system" }
 
-# Host port where LM Studio/Ollama listens (orchestrator sets via TF_VAR_llm_host_port).
-variable "llm_host_port" {
-  type        = number
-  description = "Port on the orchestrator host where the local LLM API listens"
-  default     = 11434
-}
-
-# Port inside the VM that gjoll reverse-tunnels to the host LLM proxy.
-variable "llm_proxy_port" {
-  type        = number
-  description = "Port exposed inside the VM for the local LLM gjoll proxy"
-  default     = 11434
-}
-
 resource "libvirt_volume" "base" {
   name     = "fedora-base-${var.gjoll_name}.qcow2"
   pool     = "default"
@@ -71,8 +57,6 @@ resource "libvirt_domain" "sandbox" {
   devices = {
     disks = [
       {
-        # Use source.file (disk type='file') instead of source.volume so that
-        # virt-aa-helper can resolve the path and whitelist it in AppArmor.
         source = { file = { file = libvirt_volume.root.path } }
         target = { dev = "vda", bus = "virtio" }
         driver = { name = "qemu", type = "qcow2" }
@@ -112,18 +96,19 @@ output "init_script" {
   value = <<-EOT
     #!/bin/bash
     set -euo pipefail
-    sudo dnf install -y git tmux gcc make
+    sudo dnf install -y git-core tmux
   EOT
 }
 
-# No-auth passthrough proxy: VM connects to localhost:llm_proxy_port, gjoll tunnels
-# to the host's local LLM (LM Studio, Ollama, etc.).
+# Proxy configuration for Vertex AI — OpenCode agent install and config are handled
+# by the orchestrator; the VM only needs the gjoll credential proxy.
 output "proxies" {
   value = [
     {
-      name   = "llm"
-      target = "http://127.0.0.1:${var.llm_host_port}"
-      port   = var.llm_proxy_port
+      name   = "vertex"
+      target = "https://us-east5-aiplatform.googleapis.com/v1"
+      auth   = "gcp"
+      port   = 18080
     },
   ]
 }

@@ -212,7 +212,8 @@ The `-R` flag can be specified multiple times and composes with terraform-config
 proxies. When using `gjoll proxy`, at least one of terraform proxies or `-R` flags
 must be provided.
 
-See `examples/ubuntu-claude-vertex.tf` for a complete Vertex AI + Claude Code setup.
+See `examples/ubuntu-claude-vertex.tf` for a complete Vertex AI + Claude Code setup,
+or `examples/fedora-libvirt-opencode-vertex.tf` for an OpenCode variant.
 
 ## Development
 

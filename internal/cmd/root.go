@@ -7,7 +7,7 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "gjoll",
 	Short: "Cloud VM sandbox CLI for coding agents",
-	Long:  "gjoll provisions and manages cloud VMs for running coding agents like Claude Code.",
+	Long:  "gjoll provisions and manages cloud VMs for running coding agents like Claude Code and OpenCode.",
 }
 
 func Execute() error {
