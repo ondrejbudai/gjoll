@@ -272,6 +272,14 @@ func Destroy(name string) error {
 		return err
 	}
 
+	// Refresh .tf files from the original env path so template fixes apply to
+	// sandboxes provisioned before the env file was updated.
+	if inst, err := state.Load(name); err == nil && inst.EnvPath != "" {
+		if err := copyTFFiles(inst.EnvPath, tfDir); err != nil {
+			return fmt.Errorf("refreshing tf files: %w", err)
+		}
+	}
+
 	fmt.Println("Destroying infrastructure...")
 	if err := runTofu(tfDir, "destroy", "-auto-approve"); err != nil {
 		return fmt.Errorf("tofu destroy: %w", err)
