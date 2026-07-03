@@ -43,3 +43,32 @@ func TerraformDir(name string) (string, error) {
 	}
 	return filepath.Join(instanceDir, "terraform"), nil
 }
+
+// CacheDir returns the base cache directory for gjoll.
+// Uses $XDG_CACHE_HOME/gjoll when set, otherwise ~/.cache/gjoll on Linux
+// and ~/Library/Caches/gjoll on macOS.
+func CacheDir() (string, error) {
+	if xdg := os.Getenv("XDG_CACHE_HOME"); xdg != "" {
+		return filepath.Join(xdg, "gjoll"), nil
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+
+	if runtime.GOOS == "darwin" {
+		return filepath.Join(home, "Library", "Caches", "gjoll"), nil
+	}
+
+	return filepath.Join(home, ".cache", "gjoll"), nil
+}
+
+// ImageCacheDir returns the directory for cached cloud images.
+func ImageCacheDir() (string, error) {
+	cacheDir, err := CacheDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(cacheDir, "images"), nil
+}

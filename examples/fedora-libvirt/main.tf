@@ -1,18 +1,19 @@
 terraform {
   required_providers {
-    libvirt = { source = "dmacvicar/libvirt", version = "~> 0.9" }
+    libvirt = { source = "dmacvicar/libvirt", version = "= 0.9.7" }
   }
 }
 
 provider "libvirt" { uri = "qemu:///system" }
 
 resource "libvirt_volume" "base" {
-  name   = "fedora-base-${var.gjoll_name}.qcow2"
-  pool   = "default"
-  target = { format = { type = "qcow2" } }
+  name     = "fedora-base-${var.gjoll_name}.qcow2"
+  pool     = "default"
+  capacity = 5368709120 # 5 GiB (required when download has no Content-Length)
+  target   = { format = { type = "qcow2" } }
   create = {
     content = {
-      url = "https://download.fedoraproject.org/pub/fedora/linux/releases/43/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-43-1.6.x86_64.qcow2"
+      url = local.base_image_source
     }
   }
 }
@@ -73,7 +74,7 @@ resource "libvirt_domain" "sandbox" {
       {
         source      = { network = { network = "default" } }
         model       = { type = "virtio" }
-        wait_for_ip = var.gjoll_instance_state == "running" ? { source = "lease" } : null
+        wait_for_ip = { source = "lease" }
       },
     ]
     consoles = [
@@ -86,41 +87,4 @@ data "libvirt_domain_interface_addresses" "sandbox" {
   count  = var.gjoll_instance_state == "running" ? 1 : 0
   domain = libvirt_domain.sandbox.name
   source = "lease"
-}
-
-output "public_ip" {
-  value = var.gjoll_instance_state == "running" ? data.libvirt_domain_interface_addresses.sandbox[0].interfaces[0].addrs[0].addr : ""
-}
-output "instance_id" { value = tostring(libvirt_domain.sandbox.id) }
-output "ssh_user"    { value = "fedora" }
-output "init_script" {
-  value = <<-EOT
-    #!/bin/bash
-    set -euo pipefail
-    curl -fsSL https://claude.ai/install.sh | bash
-    sudo dnf install -y git-core
-
-    # Configure Claude Code to use Vertex AI via local proxy
-    cat >> ~/.bashrc <<'RCEOF'
-    export CLAUDE_CODE_USE_VERTEX=1
-    export CLOUD_ML_REGION=us-east5
-    export ANTHROPIC_VERTEX_PROJECT_ID=yourprojecthere
-    export ANTHROPIC_VERTEX_BASE_URL=http://localhost:18080
-    export CLAUDE_CODE_SKIP_VERTEX_AUTH=1
-    export ANTHROPIC_MODEL=claude-opus-4-6
-    alias claude='claude --dangerously-skip-permissions'
-    RCEOF
-  EOT
-}
-
-# Proxy configuration for Vertex AI
-output "proxies" {
-  value = [
-    {
-      name   = "vertex"
-      target = "https://us-east5-aiplatform.googleapis.com/v1"
-      auth   = "gcp"
-      port   = 18080
-    },
-  ]
 }

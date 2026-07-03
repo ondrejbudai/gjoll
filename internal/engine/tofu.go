@@ -89,6 +89,16 @@ func Provision(name, envPath string) error {
 		return err
 	}
 
+	localPath, err := setupBaseImageCache(tfDir)
+	if err != nil {
+		return err
+	}
+	if localPath != "" {
+		if err := setTFVar(tfDir, "base_image_local_path", localPath); err != nil {
+			return err
+		}
+	}
+
 	// tofu init
 	fmt.Println("Initializing OpenTofu...")
 	if err := runTofu(tfDir, "init"); err != nil {
@@ -185,6 +195,10 @@ func Stop(name string) error {
 		return err
 	}
 
+	if err := ensureBaseImageInTFVars(tfDir); err != nil {
+		return err
+	}
+
 	fmt.Println("Stopping instance...")
 	if err := runTofu(tfDir, "apply", "-auto-approve"); err != nil {
 		return fmt.Errorf("tofu apply: %w", err)
@@ -221,6 +235,10 @@ func Start(name string) error {
 	}
 
 	if err := updateTFVarsState(tfDir, "running"); err != nil {
+		return err
+	}
+
+	if err := ensureBaseImageInTFVars(tfDir); err != nil {
 		return err
 	}
 
@@ -272,6 +290,14 @@ func Destroy(name string) error {
 		return err
 	}
 
+	// Refresh .tf files from the original env path so template fixes apply to
+	// sandboxes provisioned before the env file was updated.
+	if inst, err := state.Load(name); err == nil && inst.EnvPath != "" {
+		if err := copyTFFiles(inst.EnvPath, tfDir); err != nil {
+			return fmt.Errorf("refreshing tf files: %w", err)
+		}
+	}
+
 	fmt.Println("Destroying infrastructure...")
 	if err := runTofu(tfDir, "destroy", "-auto-approve"); err != nil {
 		return fmt.Errorf("tofu destroy: %w", err)
@@ -300,6 +326,63 @@ func writeTFVars(tfDir, pubKey, name, instanceState string) error {
 		return fmt.Errorf("writing tfvars: %w", err)
 	}
 	return nil
+}
+
+// setTFVar sets a single key in terraform.tfvars.json, preserving other fields.
+func setTFVar(tfDir, key, value string) error {
+	tfvarsPath := filepath.Join(tfDir, "terraform.tfvars.json")
+	data, err := os.ReadFile(tfvarsPath)
+	if err != nil {
+		return fmt.Errorf("reading tfvars: %w", err)
+	}
+
+	var tfvars map[string]string
+	if err := json.Unmarshal(data, &tfvars); err != nil {
+		return fmt.Errorf("parsing tfvars: %w", err)
+	}
+
+	tfvars[key] = value
+
+	out, err := json.MarshalIndent(tfvars, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(tfvarsPath, out, 0644); err != nil {
+		return fmt.Errorf("writing tfvars: %w", err)
+	}
+	return nil
+}
+
+// ensureBaseImageInTFVars restores base_image_local_path from tfvars or the
+// image cache so stop/start apply does not drift libvirt_volume.base.
+func ensureBaseImageInTFVars(tfDir string) error {
+	tfvarsPath := filepath.Join(tfDir, "terraform.tfvars.json")
+	data, err := os.ReadFile(tfvarsPath)
+	if err != nil {
+		return fmt.Errorf("reading tfvars: %w", err)
+	}
+
+	var tfvars map[string]string
+	if err := json.Unmarshal(data, &tfvars); err != nil {
+		return fmt.Errorf("parsing tfvars: %w", err)
+	}
+
+	if path := tfvars["base_image_local_path"]; path != "" {
+		return os.Setenv("TF_VAR_base_image_local_path", path)
+	}
+
+	localPath, err := setupBaseImageCache(tfDir)
+	if err != nil {
+		return err
+	}
+	if localPath == "" {
+		return nil
+	}
+
+	if err := setTFVar(tfDir, "base_image_local_path", localPath); err != nil {
+		return err
+	}
+	return os.Setenv("TF_VAR_base_image_local_path", localPath)
 }
 
 // updateTFVarsState reads the existing tfvars file and updates only the

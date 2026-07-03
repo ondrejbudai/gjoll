@@ -81,17 +81,48 @@ Environments are standard `.tf` files. gjoll injects three variables and reads o
 - `copy_files` — list of `{from, to}` objects; copies local files/directories to the VM after init. If `to` is omitted, it defaults to the same path as `from`
 - `proxies` — list of HTTP reverse proxy configurations for credential-free API access (see [Proxy](#proxy) below)
 
-See `examples/` for complete environment files.
+See `examples/` for complete environment files. For libvirt on Fedora with configurable proxy and agent modes, use `examples/fedora-libvirt/`. For AWS EC2, use `examples/fedora-aws/`.
+
+#### `fedora-libvirt/` layout
+
+| File | Role |
+|------|------|
+| `variables.tf` | `proxy_mode`, `agent_backend`, image and proxy settings |
+| `proxies.tf` | Dynamic `proxies` output |
+| `init-base.tf` | Base packages (`dnf install`) |
+| `init-opencode.tf` | OpenCode install snippet |
+| `init-claude-code.tf` | Claude Code install + env snippets per `proxy_mode` |
+| `init.tf` | Assembles `init_script` from the snippets above |
+| `main.tf` | Libvirt VM resources |
+
+#### `fedora-aws/` layout
+
+| File | Role |
+|------|------|
+| `variables.tf` | `proxy_mode`, `agent_backend`, `ami_id`, `aws_region`, `instance_type`, proxy settings |
+| `proxies.tf` | Dynamic `proxies` output |
+| `init-base.tf` | Base packages (`dnf install`) |
+| `init-opencode.tf` | OpenCode install snippet |
+| `init-claude-code.tf` | Claude Code install + env snippets per `proxy_mode` |
+| `init.tf` | Assembles `init_script` from the snippets above |
+| `main.tf` | AWS EC2 resources |
+
+Set `TF_VAR_agent_backend` (`opencode` or `claude-code`) and `TF_VAR_proxy_mode` (`vertex`, `local-llm`, `anthropic`) when provisioning; the orchestrator sets both from `orchestrator.yaml`. For AWS, the orchestrator also sets `TF_VAR_ami_id` from `aws_ami_id` (default `ami-0edf1d45580ac3fa3`).
+
+### Base image cache
+
+Libvirt examples that define `variable "base_image_url"` download the Fedora cloud image once to `~/.cache/gjoll/images/` (or `$XDG_CACHE_HOME/gjoll/images/`). Subsequent sandboxes upload from the cached file instead of re-downloading over HTTP.
 
 ## How It Works
 
-1. `gjoll up` copies your `.tf` file to a workspace directory
-2. Generates an SSH keypair and injects `gjoll_ssh_pubkey`, `gjoll_name`, and `gjoll_instance_state` as OpenTofu variables
-3. Runs `tofu init` and `tofu apply`
-4. Reads outputs (`public_ip`, `instance_id`, `ssh_user`)
-5. If `init_script` output exists, waits for SSH and runs it on the VM
-6. If `copy_files` output exists, copies each file from the local machine to the VM
-7. Saves instance metadata for other commands
+1. `gjoll up` copies your `.tf` file(s) to a workspace directory
+2. Caches the base cloud image locally when the env defines `base_image_url` (see below)
+3. Generates an SSH keypair and injects `gjoll_ssh_pubkey`, `gjoll_name`, and `gjoll_instance_state` as OpenTofu variables
+4. Runs `tofu init` and `tofu apply`
+5. Reads outputs (`public_ip`, `instance_id`, `ssh_user`)
+6. If `init_script` output exists, waits for SSH and runs it on the VM
+7. If `copy_files` output exists, copies each file from the local machine to the VM
+8. Saves instance metadata for other commands
 
 `gjoll start` and `gjoll stop` change `gjoll_instance_state` and re-run `tofu apply`. Your `.tf` file should use this variable to control the instance state (e.g., `running = var.gjoll_instance_state == "running"` for libvirt). The IP address may change after a restart — gjoll updates the SSH config automatically.
 
@@ -122,12 +153,15 @@ The `gjoll proxy` command enables secure API access from sandboxed VMs **without
 
 ### How it works
 
+Cloud credential proxies (vertex, anthropic) use in-VM port **18080** by default. Local-LLM proxies use in-VM port **11434** (`llm_proxy_port` in the fedora-libvirt template).
+
 ```
-App on VM  →  http://localhost:18080
-           →  SSH reverse tunnel (-R 18080:127.0.0.1:<local-port>)
+App on VM  →  http://localhost:18080   (vertex / anthropic)
+           or http://localhost:11434   (local-llm)
+           →  SSH reverse tunnel (-R <port>:127.0.0.1:<local-port>)
            →  Local proxy on host (127.0.0.1:<local-port>)
            →  Optionally injects auth header (GCP Bearer token or API key)
-           →  https://<target>
+           →  https://<target>   (or http://127.0.0.1:11434 for local LLM)
 ```
 
 All credentials stay on your local machine. The VM never sees any secrets.
@@ -169,7 +203,7 @@ Fields (per proxy):
 - `target` (required) — upstream URL to forward requests to
 - `auth` (optional) — `"gcp"`, `"api-key"`, or omit for no authentication
 - `api_key_file` (required for `api-key` auth) — local path to API key file (~ expanded)
-- `port` (optional, default 18080) — remote port on VM for the tunnel
+- `port` (optional) — remote port on VM for the tunnel (default **18080** for cloud proxies; **11434** for `local-llm` via `llm_proxy_port`)
 
 ### Usage
 
@@ -212,7 +246,7 @@ The `-R` flag can be specified multiple times and composes with terraform-config
 proxies. When using `gjoll proxy`, at least one of terraform proxies or `-R` flags
 must be provided.
 
-See `examples/ubuntu-claude-vertex.tf` for a complete Vertex AI + Claude Code setup.
+See `examples/ubuntu-claude-vertex.tf` for AWS + Vertex AI, or `examples/fedora-libvirt/` for libvirt with dynamic proxy modes (Vertex, local LLM, Anthropic).
 
 ## Development
 

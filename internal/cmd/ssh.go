@@ -142,16 +142,16 @@ func sshWithProxy(name, configPath string, extraTunnelArgs []string, command ...
 	sshProc.Stderr = os.Stderr
 
 	if len(inst.Proxies) > 0 {
-		fmt.Printf("Proxies active on %s:\n", name)
+		fmt.Fprintf(os.Stderr, "Proxies active on %s:\n", name)
 		for _, cfg := range inst.Proxies {
-			fmt.Printf("  %s → http://localhost:%d\n", cfg.Name, cfg.Port)
+			fmt.Fprintf(os.Stderr, "  %s → http://localhost:%d\n", cfg.Name, cfg.Port)
 		}
 	}
 	for _, rt := range sshReverseTunnels {
-		fmt.Printf("  reverse tunnel: -R %s\n", rt)
+		fmt.Fprintf(os.Stderr, "  reverse tunnel: -R %s\n", rt)
 	}
 	if len(inst.Proxies) > 0 || len(sshReverseTunnels) > 0 {
-		fmt.Println()
+		fmt.Fprintln(os.Stderr)
 	}
 
 	return sshProc.Run()

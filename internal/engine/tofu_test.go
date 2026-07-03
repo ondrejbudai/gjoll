@@ -161,3 +161,71 @@ func TestUpdateTFVarsState(t *testing.T) {
 		t.Errorf("gjoll_name = %q, want preserved", tfvars["gjoll_name"])
 	}
 }
+
+func TestSetTFVar(t *testing.T) {
+	dir := t.TempDir()
+	if err := writeTFVars(dir, "ssh-ed25519 AAAA...", "mybox", "running"); err != nil {
+		t.Fatalf("writeTFVars() error: %v", err)
+	}
+	if err := setTFVar(dir, "base_image_local_path", "/cache/image.qcow2"); err != nil {
+		t.Fatalf("setTFVar() error: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, "terraform.tfvars.json"))
+	if err != nil {
+		t.Fatalf("reading tfvars: %v", err)
+	}
+	var tfvars map[string]string
+	if err := json.Unmarshal(data, &tfvars); err != nil {
+		t.Fatalf("parsing tfvars: %v", err)
+	}
+	if tfvars["base_image_local_path"] != "/cache/image.qcow2" {
+		t.Fatalf("base_image_local_path = %q", tfvars["base_image_local_path"])
+	}
+	if tfvars["gjoll_name"] != "mybox" {
+		t.Fatalf("gjoll_name = %q, want preserved", tfvars["gjoll_name"])
+	}
+}
+
+func TestEnsureBaseImageInTFVarsFromExisting(t *testing.T) {
+	dir := t.TempDir()
+	if err := writeTFVars(dir, "ssh-ed25519 AAAA...", "mybox", "running"); err != nil {
+		t.Fatal(err)
+	}
+	if err := setTFVar(dir, "base_image_local_path", "/cache/existing.qcow2"); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TF_VAR_base_image_local_path", "")
+
+	if err := ensureBaseImageInTFVars(dir); err != nil {
+		t.Fatalf("ensureBaseImageInTFVars() error: %v", err)
+	}
+	if got := os.Getenv("TF_VAR_base_image_local_path"); got != "/cache/existing.qcow2" {
+		t.Fatalf("TF_VAR_base_image_local_path = %q, want /cache/existing.qcow2", got)
+	}
+}
+
+func TestUpdateTFVarsStatePreservesBaseImage(t *testing.T) {
+	dir := t.TempDir()
+	if err := writeTFVars(dir, "ssh-ed25519 AAAA...", "mybox", "running"); err != nil {
+		t.Fatal(err)
+	}
+	if err := setTFVar(dir, "base_image_local_path", "/cache/image.qcow2"); err != nil {
+		t.Fatal(err)
+	}
+	if err := updateTFVarsState(dir, "stopped"); err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, "terraform.tfvars.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tfvars map[string]string
+	if err := json.Unmarshal(data, &tfvars); err != nil {
+		t.Fatal(err)
+	}
+	if tfvars["base_image_local_path"] != "/cache/image.qcow2" {
+		t.Fatalf("base_image_local_path = %q, want preserved", tfvars["base_image_local_path"])
+	}
+}
