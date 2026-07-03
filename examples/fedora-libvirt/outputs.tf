@@ -7,11 +7,7 @@ output "instance_id" { value = tostring(libvirt_domain.sandbox.id) }
 output "ssh_user" { value = "fedora" }
 
 output "init_script" {
-  value = <<-EOT
-    #!/bin/bash
-    set -euo pipefail
-    sudo dnf install -y git-core tmux gcc make
-  EOT
+  value = local.init_script
 }
 
 output "proxies" {

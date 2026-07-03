@@ -9,6 +9,17 @@ variable "proxy_mode" {
   }
 }
 
+variable "agent_backend" {
+  type        = string
+  description = "Coding agent to install: opencode or claude-code"
+  default     = "opencode"
+
+  validation {
+    condition     = contains(["opencode", "claude-code"], var.agent_backend)
+    error_message = "agent_backend must be opencode or claude-code"
+  }
+}
+
 variable "vertex_region" {
   type        = string
   description = "GCP region for Vertex AI proxy target"
@@ -17,7 +28,7 @@ variable "vertex_region" {
 
 variable "vertex_project_id" {
   type        = string
-  description = "GCP project ID for Vertex AI (informational; auth via host ADC)"
+  description = "GCP project ID for Vertex AI (Claude Code vertex mode)"
   default     = ""
 }
 
@@ -59,27 +70,4 @@ variable "base_image_local_path" {
 
 locals {
   base_image_source = var.base_image_local_path != "" ? var.base_image_local_path : var.base_image_url
-
-  proxies = var.proxy_mode == "local-llm" ? [
-    {
-      name   = "llm"
-      target = "http://127.0.0.1:${var.llm_host_port}"
-      port   = var.llm_proxy_port
-    },
-    ] : var.proxy_mode == "anthropic" ? [
-    {
-      name         = "anthropic"
-      target       = "https://api.anthropic.com"
-      auth         = "api-key"
-      api_key_file = var.anthropic_key_file
-      port         = var.proxy_port
-    },
-    ] : [
-    {
-      name   = "vertex"
-      target = "https://${var.vertex_region}-aiplatform.googleapis.com/v1"
-      auth   = "gcp"
-      port   = var.proxy_port
-    },
-  ]
 }

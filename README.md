@@ -81,7 +81,21 @@ Environments are standard `.tf` files. gjoll injects three variables and reads o
 - `copy_files` — list of `{from, to}` objects; copies local files/directories to the VM after init. If `to` is omitted, it defaults to the same path as `from`
 - `proxies` — list of HTTP reverse proxy configurations for credential-free API access (see [Proxy](#proxy) below)
 
-See `examples/` for complete environment files. For libvirt on Fedora with configurable proxy modes (Vertex AI, local LLM, Anthropic API), use `examples/fedora-libvirt/`.
+See `examples/` for complete environment files. For libvirt on Fedora with configurable proxy and agent modes, use `examples/fedora-libvirt/`.
+
+#### `fedora-libvirt/` layout
+
+| File | Role |
+|------|------|
+| `variables.tf` | `proxy_mode`, `agent_backend`, image and proxy settings |
+| `proxies.tf` | Dynamic `proxies` output |
+| `init-base.tf` | Base packages (`dnf install`) |
+| `init-opencode.tf` | OpenCode install snippet |
+| `init-claude-code.tf` | Claude Code install + env snippets per `proxy_mode` |
+| `init.tf` | Assembles `init_script` from the snippets above |
+| `main.tf` | Libvirt VM resources |
+
+Set `TF_VAR_agent_backend` (`opencode` or `claude-code`) and `TF_VAR_proxy_mode` (`vertex`, `local-llm`, `anthropic`) when provisioning; the orchestrator sets both from `orchestrator.yaml`.
 
 ### Base image cache
 
