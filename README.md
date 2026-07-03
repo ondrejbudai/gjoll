@@ -141,12 +141,15 @@ The `gjoll proxy` command enables secure API access from sandboxed VMs **without
 
 ### How it works
 
+Cloud credential proxies (vertex, anthropic) use in-VM port **18080** by default. Local-LLM proxies use in-VM port **11434** (`llm_proxy_port` in the fedora-libvirt template).
+
 ```
-App on VM  →  http://localhost:18080
-           →  SSH reverse tunnel (-R 18080:127.0.0.1:<local-port>)
+App on VM  →  http://localhost:18080   (vertex / anthropic)
+           or http://localhost:11434   (local-llm)
+           →  SSH reverse tunnel (-R <port>:127.0.0.1:<local-port>)
            →  Local proxy on host (127.0.0.1:<local-port>)
            →  Optionally injects auth header (GCP Bearer token or API key)
-           →  https://<target>
+           →  https://<target>   (or http://127.0.0.1:11434 for local LLM)
 ```
 
 All credentials stay on your local machine. The VM never sees any secrets.
@@ -188,7 +191,7 @@ Fields (per proxy):
 - `target` (required) — upstream URL to forward requests to
 - `auth` (optional) — `"gcp"`, `"api-key"`, or omit for no authentication
 - `api_key_file` (required for `api-key` auth) — local path to API key file (~ expanded)
-- `port` (optional, default 18080) — remote port on VM for the tunnel
+- `port` (optional) — remote port on VM for the tunnel (default **18080** for cloud proxies; **11434** for `local-llm` via `llm_proxy_port`)
 
 ### Usage
 

@@ -134,20 +134,22 @@ func parseHCLDefaultURL(content, varName string) string {
 	return rest[:end]
 }
 
-// setupBaseImageCache sets TF_VAR_base_image_local_path when the env defines base_image_url.
-func setupBaseImageCache(tfDir string) error {
+// setupBaseImageCache downloads the base cloud image when needed and returns
+// the local cache path. It also sets TF_VAR_base_image_local_path for the
+// current process.
+func setupBaseImageCache(tfDir string) (string, error) {
 	imageURL, ok := baseImageURLFromTF(tfDir)
 	if !ok {
-		return nil
+		return "", nil
 	}
 
 	fmt.Println("Ensuring base cloud image is cached...")
 	localPath, err := EnsureCachedImage(imageURL)
 	if err != nil {
-		return fmt.Errorf("caching base image: %w", err)
+		return "", fmt.Errorf("caching base image: %w", err)
 	}
 	if err := os.Setenv("TF_VAR_base_image_local_path", localPath); err != nil {
-		return err
+		return "", err
 	}
-	return nil
+	return localPath, nil
 }

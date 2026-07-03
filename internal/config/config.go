@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 )
 
 // FileMapping defines a file to copy from the local machine to the VM.
@@ -106,8 +107,13 @@ func ParseOutputs(data []byte) (*Outputs, error) {
 				if apiKeyFile, ok := m["api_key_file"].(string); ok {
 					p.APIKeyFile = apiKeyFile
 				}
-				if port, ok := m["port"].(float64); ok {
-					p.Port = int(port)
+				switch v := m["port"].(type) {
+				case float64:
+					p.Port = int(v)
+				case string:
+					if n, err := strconv.Atoi(v); err == nil {
+						p.Port = n
+					}
 				}
 				o.Proxies = append(o.Proxies, p)
 			}

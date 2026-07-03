@@ -123,13 +123,16 @@ func TestSetupBaseImageCacheSetsEnv(t *testing.T) {
 	t.Setenv("XDG_CACHE_HOME", cacheRoot)
 	t.Setenv("TF_VAR_base_image_local_path", "")
 
-	if err := setupBaseImageCache(tfDir); err != nil {
+	localPath, err := setupBaseImageCache(tfDir)
+	if err != nil {
 		t.Fatalf("setupBaseImageCache(): %v", err)
 	}
-
-	localPath := os.Getenv("TF_VAR_base_image_local_path")
 	if localPath == "" {
-		t.Fatal("TF_VAR_base_image_local_path not set")
+		t.Fatal("expected local cache path")
+	}
+
+	if got := os.Getenv("TF_VAR_base_image_local_path"); got != localPath {
+		t.Fatalf("TF_VAR_base_image_local_path = %q, want %q", got, localPath)
 	}
 	if !strings.HasSuffix(localPath, ".qcow2") {
 		t.Fatalf("unexpected cache path %q", localPath)

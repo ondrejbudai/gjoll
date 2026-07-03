@@ -92,7 +92,7 @@ func startProxies(ctx context.Context, proxies []config.ProxyConfig) (*proxySet,
 		if authDesc == "" {
 			authDesc = "none"
 		}
-		fmt.Printf("Starting proxy %q to %s (auth: %s)...\n", cfg.Name, cfg.Target, authDesc)
+		fmt.Fprintf(os.Stderr, "Starting proxy %q to %s (auth: %s)...\n", cfg.Name, cfg.Target, authDesc)
 
 		p, err := proxy.New(cfg.Target, cfg.Auth, apiKey)
 		if err != nil {
@@ -108,7 +108,7 @@ func startProxies(ctx context.Context, proxies []config.ProxyConfig) (*proxySet,
 
 		ps.proxies = append(ps.proxies, p)
 		ps.tunnelArgs = append(ps.tunnelArgs, "-R", fmt.Sprintf("%d:127.0.0.1:%d", cfg.Port, localPort))
-		fmt.Printf("  %s listening on localhost:%d → remote port %d\n", cfg.Name, localPort, cfg.Port)
+		fmt.Fprintf(os.Stderr, "  %s listening on localhost:%d → remote port %d\n", cfg.Name, localPort, cfg.Port)
 	}
 
 	return ps, nil

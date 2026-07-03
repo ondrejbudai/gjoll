@@ -262,6 +262,20 @@ func TestParseOutputsProxies(t *testing.T) {
 			},
 		},
 		{
+			name: "local llm string port",
+			data: `{
+				"public_ip": {"value": "1.2.3.4", "type": "string"},
+				"instance_id": {"value": "i-abc123", "type": "string"},
+				"ssh_user": {"value": "fedora", "type": "string"},
+				"proxies": {"value": [
+					{"name": "llm", "target": "http://127.0.0.1:11434", "port": "11434"}
+				], "type": ["list", "object"]}
+			}`,
+			want: []ProxyConfig{
+				{Name: "llm", Target: "http://127.0.0.1:11434", Port: 11434},
+			},
+		},
+		{
 			name: "no proxies output",
 			data: `{
 				"public_ip": {"value": "1.2.3.4", "type": "string"},
