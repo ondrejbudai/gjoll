@@ -89,6 +89,10 @@ func Provision(name, envPath string) error {
 		return err
 	}
 
+	if err := setupBaseImageCache(tfDir); err != nil {
+		return err
+	}
+
 	// tofu init
 	fmt.Println("Initializing OpenTofu...")
 	if err := runTofu(tfDir, "init"); err != nil {

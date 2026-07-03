@@ -81,17 +81,22 @@ Environments are standard `.tf` files. gjoll injects three variables and reads o
 - `copy_files` — list of `{from, to}` objects; copies local files/directories to the VM after init. If `to` is omitted, it defaults to the same path as `from`
 - `proxies` — list of HTTP reverse proxy configurations for credential-free API access (see [Proxy](#proxy) below)
 
-See `examples/` for complete environment files.
+See `examples/` for complete environment files. For libvirt on Fedora with configurable proxy modes (Vertex AI, local LLM, Anthropic API), use `examples/fedora-libvirt/`.
+
+### Base image cache
+
+Libvirt examples that define `variable "base_image_url"` download the Fedora cloud image once to `~/.cache/gjoll/images/` (or `$XDG_CACHE_HOME/gjoll/images/`). Subsequent sandboxes upload from the cached file instead of re-downloading over HTTP.
 
 ## How It Works
 
-1. `gjoll up` copies your `.tf` file to a workspace directory
-2. Generates an SSH keypair and injects `gjoll_ssh_pubkey`, `gjoll_name`, and `gjoll_instance_state` as OpenTofu variables
-3. Runs `tofu init` and `tofu apply`
-4. Reads outputs (`public_ip`, `instance_id`, `ssh_user`)
-5. If `init_script` output exists, waits for SSH and runs it on the VM
-6. If `copy_files` output exists, copies each file from the local machine to the VM
-7. Saves instance metadata for other commands
+1. `gjoll up` copies your `.tf` file(s) to a workspace directory
+2. Caches the base cloud image locally when the env defines `base_image_url` (see below)
+3. Generates an SSH keypair and injects `gjoll_ssh_pubkey`, `gjoll_name`, and `gjoll_instance_state` as OpenTofu variables
+4. Runs `tofu init` and `tofu apply`
+5. Reads outputs (`public_ip`, `instance_id`, `ssh_user`)
+6. If `init_script` output exists, waits for SSH and runs it on the VM
+7. If `copy_files` output exists, copies each file from the local machine to the VM
+8. Saves instance metadata for other commands
 
 `gjoll start` and `gjoll stop` change `gjoll_instance_state` and re-run `tofu apply`. Your `.tf` file should use this variable to control the instance state (e.g., `running = var.gjoll_instance_state == "running"` for libvirt). The IP address may change after a restart — gjoll updates the SSH config automatically.
 
@@ -212,8 +217,7 @@ The `-R` flag can be specified multiple times and composes with terraform-config
 proxies. When using `gjoll proxy`, at least one of terraform proxies or `-R` flags
 must be provided.
 
-See `examples/ubuntu-claude-vertex.tf` for a complete Vertex AI + Claude Code setup,
-or `examples/fedora-libvirt-opencode-vertex.tf` for an OpenCode variant.
+See `examples/ubuntu-claude-vertex.tf` for AWS + Vertex AI, or `examples/fedora-libvirt/` for libvirt with dynamic proxy modes (Vertex, local LLM, Anthropic).
 
 ## Development
 

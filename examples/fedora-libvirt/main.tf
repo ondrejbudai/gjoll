@@ -6,20 +6,6 @@ terraform {
 
 provider "libvirt" { uri = "qemu:///system" }
 
-# Host port where LM Studio/Ollama listens (orchestrator sets via TF_VAR_llm_host_port).
-variable "llm_host_port" {
-  type        = number
-  description = "Port on the orchestrator host where the local LLM API listens"
-  default     = 11434
-}
-
-# Port inside the VM that gjoll reverse-tunnels to the host LLM proxy.
-variable "llm_proxy_port" {
-  type        = number
-  description = "Port exposed inside the VM for the local LLM gjoll proxy"
-  default     = 11434
-}
-
 resource "libvirt_volume" "base" {
   name     = "fedora-base-${var.gjoll_name}.qcow2"
   pool     = "default"
@@ -27,7 +13,7 @@ resource "libvirt_volume" "base" {
   target   = { format = { type = "qcow2" } }
   create = {
     content = {
-      url = "https://download.fedoraproject.org/pub/fedora/linux/releases/43/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-43-1.6.x86_64.qcow2"
+      url = local.base_image_source
     }
   }
 }
@@ -101,29 +87,4 @@ data "libvirt_domain_interface_addresses" "sandbox" {
   count  = var.gjoll_instance_state == "running" ? 1 : 0
   domain = libvirt_domain.sandbox.name
   source = "lease"
-}
-
-output "public_ip" {
-  value = var.gjoll_instance_state == "running" ? data.libvirt_domain_interface_addresses.sandbox[0].interfaces[0].addrs[0].addr : ""
-}
-output "instance_id" { value = tostring(libvirt_domain.sandbox.id) }
-output "ssh_user"    { value = "fedora" }
-output "init_script" {
-  value = <<-EOT
-    #!/bin/bash
-    set -euo pipefail
-    sudo dnf install -y git tmux gcc make
-  EOT
-}
-
-# No-auth passthrough proxy: VM connects to localhost:llm_proxy_port, gjoll tunnels
-# to the host's local LLM (LM Studio, Ollama, etc.).
-output "proxies" {
-  value = [
-    {
-      name   = "llm"
-      target = "http://127.0.0.1:${var.llm_host_port}"
-      port   = var.llm_proxy_port
-    },
-  ]
 }

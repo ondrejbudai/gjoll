@@ -17,7 +17,7 @@ import (
 
 const (
 	sandboxName = "fedora-libvirt"
-	envFile     = "examples/fedora-libvirt.tf"
+	envFile     = "examples/fedora-libvirt"
 )
 
 // gjoll runs the gjoll binary and returns combined output.
